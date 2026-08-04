@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>NexgenSocial</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.corverxis.nexgensocial</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- App Review rejects builds whose permission strings are vague or
+         boilerplate. Each of these says what the app actually does with
+         the permission and why. -->
+    <key>NSCameraUsageDescription</key>
+    <string>NexgenSocial uses your camera for video calls, recording reels, and taking photos to post.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>NexgenSocial uses your microphone for voice and video calls, and for recording reels with sound.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>NexgenSocial needs access to your photos so you can share them in posts, messages, and marketplace listings.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>NexgenSocial saves photos and videos you download to your photo library.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>NexgenSocial uses your location only when you tap "use my current location" to save a place you have visited. It never tracks you in the background.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>NexgenSocial can check which of your contacts are already here, so you can find them. Contacts are matched and not stored.</string>
+
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+        <string>voip</string>
+        <string>remote-notification</string>
+    </array>
+
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIColorName</key>
+        <string>LaunchBackground</string>
+    </dict>
+
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+</dict>
+</plist>

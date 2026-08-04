@@ -1,0 +1,233 @@
+import SwiftUI
+
+struct AuthView: View {
+    @EnvironmentObject var session: AuthSession
+    @State private var isSignUp = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 22) {
+                    VStack(spacing: 6) {
+                        Text("NexgenSocial")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text("A social platform that shows its working")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.slate400)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 50)
+
+                    if isSignUp { SignUpForm() } else { SignInForm() }
+
+                    Button {
+                        withAnimation { isSignUp.toggle() }
+                        session.errorMessage = nil
+                    } label: {
+                        Text(isSignUp ? "Already have an account? Sign in"
+                                      : "New here? Create an account")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.cyan300)
+                    }
+
+                    if isSignUp { HighlightsSection() }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
+            }
+            .background(Theme.navy950)
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
+}
+
+struct SignInForm: View {
+    @EnvironmentObject var session: AuthSession
+    @State private var email = ""
+    @State private var password = ""
+    @State private var busy = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            TextField("Email", text: $email)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .fieldStyle()
+
+            SecureField("Password", text: $password)
+                .textContentType(.password)
+                .fieldStyle()
+
+            if let error = session.errorMessage {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button {
+                busy = true
+                Task {
+                    await session.signIn(email: email, password: password)
+                    busy = false
+                }
+            } label: {
+                Text(busy ? "Signing in…" : "Sign in").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(busy || email.isEmpty || password.isEmpty)
+        }
+        .padding(18)
+        .card()
+    }
+}
+
+struct SignUpForm: View {
+    @EnvironmentObject var session: AuthSession
+    @State private var email = ""
+    @State private var username = ""
+    @State private var displayName = ""
+    @State private var password = ""
+    @State private var acceptedTerms = false
+    @State private var busy = false
+
+    // Mirrors the server's rule exactly. Catching it here means a clear
+    // inline message instead of a round-trip that returns a 400.
+    private var usernameValid: Bool {
+        username.range(of: "^[a-zA-Z0-9_.-]{3,30}$", options: .regularExpression) != nil
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            TextField("Email", text: $email)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .fieldStyle()
+
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Username", text: $username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .fieldStyle()
+                if !username.isEmpty && !usernameValid {
+                    Text("Letters, numbers, and _ . - only. No spaces.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.danger)
+                }
+            }
+
+            TextField("Display name", text: $displayName).fieldStyle()
+
+            SecureField("Password (8+ characters)", text: $password)
+                .textContentType(.newPassword)
+                .fieldStyle()
+
+            Toggle(isOn: $acceptedTerms) {
+                Text("I agree to the Terms of Use and Privacy Policy")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.slate300)
+            }
+            .tint(Theme.cyan400)
+
+            HStack(spacing: 14) {
+                Link("Terms", destination: URL(string: AppConfig.termsURL)!)
+                Link("Privacy", destination: URL(string: AppConfig.privacyURL)!)
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.cyan300)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let error = session.errorMessage {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button {
+                busy = true
+                Task {
+                    await session.signUp(email: email, username: username,
+                                         displayName: displayName, password: password,
+                                         acceptedTerms: acceptedTerms)
+                    busy = false
+                }
+            } label: {
+                Text(busy ? "Creating…" : "Create account").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(busy || !acceptedTerms || !usernameValid
+                      || email.isEmpty || displayName.isEmpty || password.count < 8)
+        }
+        .padding(18)
+        .card()
+    }
+}
+
+/// The same highlights shown on the web signup page.
+struct HighlightsSection: View {
+    private let items: [(String, String, String)] = [
+        ("play.rectangle.fill", "Reels that reach beyond your followers",
+         "Reels rank on whether people watch to the end, not on follower count."),
+        ("slider.horizontal.3", "Your feed, your rules",
+         "Set how your feed weights recency, engagement and diversity."),
+        ("lock.shield.fill", "Ad settings off by default",
+         "Interest targeting is opt-in. We never sell your profile."),
+        ("phone.fill", "Messages, voice and video calls",
+         "Talk to anyone on NexgenSocial from anywhere with internet."),
+        ("video.fill", "NexgenMeet",
+         "Video meetings with waiting rooms and host controls."),
+        ("bag.fill", "Marketplace and jobs",
+         "Real photo and video listings; salary ranges shown up front."),
+        ("square.and.arrow.up", "Take your data with you",
+         "Export everything you've posted in one tap."),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("What you get")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+
+            ForEach(items, id: \.1) { icon, title, body in
+                HStack(alignment: .top, spacing: 11) {
+                    Image(systemName: icon)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.cyan400)
+                        .frame(width: 30, height: 30)
+                        .background(Theme.navy800)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(body)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.slate400)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .card()
+    }
+}
+
+extension View {
+    func fieldStyle() -> some View {
+        self
+            .font(.system(size: 15))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 12)
+            .background(Theme.navy950)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.line, lineWidth: 1))
+    }
+}
