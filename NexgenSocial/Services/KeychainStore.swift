@@ -24,7 +24,7 @@ enum KeychainStore {
         attributes[kSecValueData as String] = data
         // Not synced to iCloud, and unavailable until the device has been
         // unlocked once after boot -- appropriate for a session credential.
-        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstThisDeviceOnly
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(attributes as CFDictionary, nil)
     }
 

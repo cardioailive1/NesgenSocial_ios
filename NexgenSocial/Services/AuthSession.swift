@@ -23,27 +23,19 @@ final class AuthSession: ObservableObject {
             return
         }
         do {
-            let response = try await APIClient.shared.get("/api/auth/me", as: MeResponse.self)
-            currentUser = response.user
+            currentUser = try await AuthService.me()
         } catch {
             await APIClient.shared.setToken(nil)
             currentUser = nil
         }
     }
 
-    func signIn(email: String, password: String) async {
-        errorMessage = nil
-        do {
-            let response = try await APIClient.shared.post(
-                "/api/auth/login",
-                body: ["email": email, "password": password],
-                as: AuthResponse.self
-            )
-            await APIClient.shared.setToken(response.token)
-            currentUser = response.user
-            await PushService.shared.registerIfAuthorized()
-        } catch {
-            errorMessage = error.localizedDescription
+    /// Takes an email *or* a username -- the server matches either, and the
+    /// body key has to be `emailOrUsername` or it rejects the request as
+    /// missing credentials.
+    func signIn(emailOrUsername: String, password: String) async {
+        await authenticate {
+            try await AuthService.login(emailOrUsername: emailOrUsername, password: password)
         }
     }
 
@@ -54,24 +46,15 @@ final class AuthSession: ObservableObject {
             errorMessage = "You must accept the Terms of Use and Privacy Policy."
             return
         }
-        do {
-            let response = try await APIClient.shared.post(
-                "/api/auth/register",
-                body: [
-                    "email": email,
-                    "username": username,
-                    "displayName": displayName,
-                    "password": password,
-                    "acceptedTerms": true,
-                    "policyVersion": AppConfig.policyVersion,
-                ],
-                as: AuthResponse.self
-            )
-            await APIClient.shared.setToken(response.token)
-            currentUser = response.user
-            await PushService.shared.registerIfAuthorized()
-        } catch {
-            errorMessage = error.localizedDescription
+        await authenticate {
+            try await AuthService.register([
+                "email": email,
+                "username": username,
+                "displayName": displayName,
+                "password": password,
+                "acceptedTerms": true,
+                "policyVersion": AppConfig.policyVersion,
+            ])
         }
     }
 
@@ -80,9 +63,22 @@ final class AuthSession: ObservableObject {
         await APIClient.shared.setToken(nil)
         currentUser = nil
     }
-}
 
-struct MeResponse: Codable { let user: User }
+    /// Sign-in and sign-up differ only in the request they make; everything
+    /// after -- storing the token, publishing the user, registering for push,
+    /// surfacing the error -- is identical and lives here once.
+    private func authenticate(_ request: () async throws -> AuthResponse) async {
+        errorMessage = nil
+        do {
+            let response = try await request()
+            await APIClient.shared.setToken(response.token)
+            currentUser = response.user
+            await PushService.shared.registerIfAuthorized()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
 
 enum AppConfig {
     static let policyVersion = "2026-07-30"

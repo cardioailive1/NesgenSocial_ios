@@ -1,0 +1,408 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A100000000000000000203 /* Mediasoup in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000202 /* Mediasoup */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A100000000000000000301 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000000000000000000E3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000000000000000000C1;
+			remoteInfo = NexgenSocial;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A1000000000000000000A1 /* NexgenSocial.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NexgenSocial.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000000000000000000A2 /* NexgenSocialTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NexgenSocialTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A1000000000000000000B1 /* Exceptions for "NexgenSocial" folder in "NexgenSocial" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/Info.plist,
+			);
+			target = A1000000000000000000C1 /* NexgenSocial */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A1000000000000000000B2 /* NexgenSocial */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A1000000000000000000B1 /* Exceptions for "NexgenSocial" folder in "NexgenSocial" target */,
+			);
+			path = NexgenSocial;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000B3 /* NexgenSocialTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NexgenSocialTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1000000000000000000D1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A100000000000000000203 /* Mediasoup in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1000000000000000000D4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1000000000000000000E1 = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000B2 /* NexgenSocial */,
+				A1000000000000000000B3 /* NexgenSocialTests */,
+				A1000000000000000000E2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000A1 /* NexgenSocial.app */,
+				A1000000000000000000A2 /* NexgenSocialTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1000000000000000000C1 /* NexgenSocial */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000000F2 /* Build configuration list for PBXNativeTarget "NexgenSocial" */;
+			buildPhases = (
+				A1000000000000000000D2 /* Sources */,
+				A1000000000000000000D1 /* Frameworks */,
+				A1000000000000000000D3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1000000000000000000B2 /* NexgenSocial */,
+			);
+			name = NexgenSocial;
+			packageProductDependencies = (
+				A100000000000000000202 /* Mediasoup */,
+			);
+			productName = NexgenSocial;
+			productReference = A1000000000000000000A1 /* NexgenSocial.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A1000000000000000000C2 /* NexgenSocialTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000000F3 /* Build configuration list for PBXNativeTarget "NexgenSocialTests" */;
+			buildPhases = (
+				A1000000000000000000D5 /* Sources */,
+				A1000000000000000000D4 /* Frameworks */,
+				A1000000000000000000D6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A100000000000000000302 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1000000000000000000B3 /* NexgenSocialTests */,
+			);
+			name = NexgenSocialTests;
+			packageProductDependencies = (
+			);
+			productName = NexgenSocialTests;
+			productReference = A1000000000000000000A2 /* NexgenSocialTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1000000000000000000E3 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					A1000000000000000000C1 = {
+						CreatedOnToolsVersion = 26.4;
+					};
+					A1000000000000000000C2 = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = A1000000000000000000C1;
+					};
+				};
+			};
+			buildConfigurationList = A1000000000000000000F1 /* Build configuration list for PBXProject "NexgenSocial" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1000000000000000000E1;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A100000000000000000201 /* XCRemoteSwiftPackageReference "mediasoup-client-swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A1000000000000000000E2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1000000000000000000C1 /* NexgenSocial */,
+				A1000000000000000000C2 /* NexgenSocialTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1000000000000000000D3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1000000000000000000D6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1000000000000000000D2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1000000000000000000D5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A100000000000000000302 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000000000000000000C1 /* NexgenSocial */;
+			targetProxy = A100000000000000000301 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A100000000000000000101 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A100000000000000000102 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A100000000000000000103 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = NexgenSocial/Resources/NexgenSocial.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W9464NC4J7;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NexgenSocial/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.corverxis.nexgensocial;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A100000000000000000104 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = NexgenSocial/Resources/NexgenSocial.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W9464NC4J7;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NexgenSocial/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.corverxis.nexgensocial;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A100000000000000000105 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W9464NC4J7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.corverxis.nexgensocial.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NexgenSocial.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NexgenSocial";
+			};
+			name = Debug;
+		};
+		A100000000000000000106 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W9464NC4J7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.corverxis.nexgensocial.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NexgenSocial.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NexgenSocial";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1000000000000000000F1 /* Build configuration list for PBXProject "NexgenSocial" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100000000000000000101 /* Debug */,
+				A100000000000000000102 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000000000000000F2 /* Build configuration list for PBXNativeTarget "NexgenSocial" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100000000000000000103 /* Debug */,
+				A100000000000000000104 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000000000000000F3 /* Build configuration list for PBXNativeTarget "NexgenSocialTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100000000000000000105 /* Debug */,
+				A100000000000000000106 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A100000000000000000201 /* XCRemoteSwiftPackageReference "mediasoup-client-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/VLprojects/mediasoup-client-swift";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.13.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A100000000000000000202 /* Mediasoup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A100000000000000000201 /* XCRemoteSwiftPackageReference "mediasoup-client-swift" */;
+			productName = Mediasoup;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A1000000000000000000E3 /* Project object */;
+}

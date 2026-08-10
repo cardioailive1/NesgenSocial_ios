@@ -133,6 +133,11 @@ actor APIClient {
         return try await perform(makeRequest(path, method: "PATCH", body: data ?? Data("{}".utf8)), as: type)
     }
 
+    func put<T: Decodable>(_ path: String, body: [String: Any]? = nil, as type: T.Type) async throws -> T {
+        let data = body.map { try? JSONSerialization.data(withJSONObject: $0) } ?? nil
+        return try await perform(makeRequest(path, method: "PUT", body: data ?? Data("{}".utf8)), as: type)
+    }
+
     @discardableResult
     func delete(_ path: String) async throws -> EmptyResponse {
         try await perform(makeRequest(path, method: "DELETE"), as: EmptyResponse.self)
