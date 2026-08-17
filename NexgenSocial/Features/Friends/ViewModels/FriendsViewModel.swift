@@ -6,7 +6,27 @@ final class FriendsViewModel: ObservableObject {
     @Published var sent: [FriendRequest] = []
     @Published var friends: [User] = []
     @Published var suggestions: [FriendSuggestion] = []
+    @Published var usernameToAdd = ""
+    @Published var notice: String?
     @Published var errorMessage: String?
+
+    /// Sends to the username typed in the add field. The confirmation says
+    /// where the request went — a transient "sent" state with no follow-up
+    /// reads as if nothing happened.
+    func sendRequestByUsername() async {
+        let username = usernameToAdd.trimmingCharacters(in: .whitespaces)
+        guard !username.isEmpty else { return }
+        do {
+            try await FriendsService.sendRequest(to: username)
+            notice = "Request sent to @\(username). It's waiting for them to accept — you'll find it under \"Requests you've sent\"."
+            usernameToAdd = ""
+            errorMessage = nil
+            await load()
+        } catch {
+            notice = nil
+            errorMessage = error.localizedDescription
+        }
+    }
 
     func load() async {
         do {

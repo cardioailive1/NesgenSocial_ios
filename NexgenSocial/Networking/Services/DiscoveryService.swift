@@ -8,6 +8,13 @@ enum DiscoveryService {
         try await APIClient.shared.get(APIEndpoints.Users.search(query), as: UsersResponse.self).users
     }
 
+    /// Everyone on the platform, each row carrying the viewer's relationship
+    /// to that person (`isFollowing`, `friendStatus`) so the People screen can
+    /// pick the right buttons without a request per row.
+    static func people(matching query: String) async throws -> [User] {
+        try await APIClient.shared.get(APIEndpoints.Users.search(query), as: UsersResponse.self).users
+    }
+
     static func jobs(matching query: String) async throws -> [JobPosting] {
         try await APIClient.shared.get(APIEndpoints.Jobs.search(query), as: JobsResponse.self).jobs
     }

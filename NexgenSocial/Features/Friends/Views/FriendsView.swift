@@ -11,6 +11,33 @@ struct FriendsView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
+                    Text("Friend requests need both people to agree. Once you send one it sits here until the other person accepts it.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.slate400)
+                        .padding(.horizontal, 14)
+
+                    HStack(spacing: 10) {
+                        TextField("Add a friend by username", text: $model.usernameToAdd)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .fieldStyle()
+                        Button("Send request") { Task { await model.sendRequestByUsername() } }
+                            .font(.system(size: 13, weight: .semibold))
+                            .buttonStyle(.borderedProminent)
+                            .tint(Theme.cyan400)
+                            .disabled(model.usernameToAdd.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    .padding(12)
+                    .card()
+                    .padding(.horizontal, 14)
+
+                    if let notice = model.notice {
+                        Text(notice)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.cyan300)
+                            .padding(.horizontal, 14)
+                    }
+
                     if let errorMessage = model.errorMessage {
                         Text(errorMessage)
                             .font(.system(size: 13))
@@ -19,8 +46,13 @@ struct FriendsView: View {
                             .accessibilityIdentifier("error-banner")
                     }
 
-                    if !model.incoming.isEmpty {
-                        SectionHeader("Requests")
+                    SectionHeader("Requests waiting on you (\(model.incoming.count))")
+                    if model.incoming.isEmpty {
+                        Text("No one's asked to be your friend right now.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.slate400)
+                            .padding(.horizontal, 14)
+                    } else {
                         ForEach(model.incoming) { request in
                             FriendRow(user: request.sender,
                                       subtitle: "wants to be friends") {
@@ -41,13 +73,18 @@ struct FriendsView: View {
                         }
                     }
 
-                    if !model.sent.isEmpty {
-                        SectionHeader("Sent")
+                    SectionHeader("Requests you've sent (\(model.sent.count))")
+                    if model.sent.isEmpty {
+                        Text("You haven't sent any requests that are still pending.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.slate400)
+                            .padding(.horizontal, 14)
+                    } else {
                         ForEach(model.sent) { request in
-                            FriendRow(user: request.receiver, subtitle: "request pending") {
+                            FriendRow(user: request.receiver, subtitle: "awaiting reply") {
                                 Button("Cancel") { Task { await model.cancel(request) } }
                                     .font(.system(size: 12))
-                                    .tint(Theme.slate400)
+                                    .tint(Theme.danger)
                             }
                             .padding(.horizontal, 14)
                         }
@@ -63,9 +100,9 @@ struct FriendsView: View {
                         }
                     }
 
-                    SectionHeader("Friends")
+                    SectionHeader("Friends (\(model.friends.count))")
                     if model.friends.isEmpty {
-                        Text("No friends yet. Send a request from someone's profile.")
+                        Text("No friends yet. Try the People page to find someone.")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.slate400)
                             .padding(.horizontal, 14)

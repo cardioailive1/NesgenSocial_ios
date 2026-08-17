@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import PhotosUI
 
 @MainActor
 final class GroupsViewModel: ObservableObject {
@@ -27,6 +29,10 @@ final class GroupDetailViewModel: ObservableObject {
     @Published private(set) var isMember = false
     @Published var errorMessage: String?
 
+    @Published var composerText = ""
+    @Published var composerAttachments: [PickedAttachment] = []
+    @Published private(set) var isPosting = false
+
     private let group: SocialGroup
 
     init(group: SocialGroup) {
@@ -41,6 +47,29 @@ final class GroupDetailViewModel: ObservableObject {
             posts = try await loadedPosts
             members = try await loadedMembers
             errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    var canPost: Bool { !composerText.isEmpty || !composerAttachments.isEmpty }
+
+    func addAttachments(_ items: [PhotosPickerItem]) async {
+        composerAttachments += await AttachmentLoader.load(items)
+    }
+
+    func submitPost() async {
+        guard canPost, !isPosting else { return }
+        isPosting = true
+        defer { isPosting = false }
+        do {
+            try await GroupsService.createPost(in: group.id,
+                                               body: composerText,
+                                               attachments: composerAttachments)
+            composerText = ""
+            composerAttachments = []
+            errorMessage = nil
+            await load()
         } catch {
             errorMessage = error.localizedDescription
         }

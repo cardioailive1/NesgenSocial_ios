@@ -14,6 +14,14 @@ enum GroupsService {
         try await APIClient.shared.get(APIEndpoints.Groups.posts(groupId), as: FeedResponse.self).posts
     }
 
+    /// Group posts are created through the normal post endpoint with a
+    /// `groupId` field — `/api/groups/:id/posts` is read-only on the server.
+    static func createPost(in groupId: String,
+                           body: String,
+                           attachments: [PickedAttachment] = []) async throws {
+        try await PostsService.create(body: body, groupId: groupId, attachments: attachments)
+    }
+
     static func members(of groupId: String) async throws -> [GroupMember] {
         try await APIClient.shared
             .get(APIEndpoints.Groups.members(groupId), as: GroupMembersResponse.self).members

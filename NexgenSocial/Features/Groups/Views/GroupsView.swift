@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// Public groups to discover, plus the ones you're already in.
 struct GroupsView: View {
@@ -84,6 +85,7 @@ struct GroupDetailView: View {
     let group: SocialGroup
 
     @StateObject private var model: GroupDetailViewModel
+    @State private var pickedItems: [PhotosPickerItem] = []
 
     init(group: SocialGroup) {
         self.group = group
@@ -134,6 +136,11 @@ struct GroupDetailView: View {
                         .padding(.horizontal, 14)
                     }
 
+                    if model.isMember {
+                        groupComposer
+                            .padding(.horizontal, 14)
+                    }
+
                     SectionHeader("Posts")
                     if model.posts.isEmpty {
                         Text("Nothing posted in this group yet.")
@@ -156,6 +163,56 @@ struct GroupDetailView: View {
         .navigationTitle(group.name)
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
+    }
+
+    private var groupComposer: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextEditor(text: $model.composerText)
+                .frame(minHeight: 80)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .foregroundStyle(.white)
+                .background(Theme.navy950)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(alignment: .topLeading) {
+                    if model.composerText.isEmpty {
+                        Text("Post in \(group.name)…")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.slate400)
+                            .padding(14)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+            if !model.composerAttachments.isEmpty {
+                AttachmentStrip(attachments: $model.composerAttachments)
+            }
+
+            HStack {
+                PhotosPicker(selection: $pickedItems, maxSelectionCount: 10,
+                             matching: .any(of: [.images, .videos])) {
+                    Label("Add photos & videos", systemImage: "photo.on.rectangle.angled")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.cyan300)
+                }
+                Spacer(minLength: 0)
+                Button(model.isPosting ? "Posting…" : "Post") {
+                    Task { await model.submitPost() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.cyan400)
+                .font(.system(size: 14))
+                .disabled(model.isPosting || !model.canPost)
+            }
+        }
+        .padding(12)
+        .card()
+        .onChange(of: pickedItems) { _, newItems in
+            Task {
+                await model.addAttachments(newItems)
+                pickedItems = []
+            }
+        }
     }
 }
 

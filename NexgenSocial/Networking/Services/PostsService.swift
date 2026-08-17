@@ -15,9 +15,11 @@ enum PostsService {
     static func create(body: String,
                        audience: String = "PUBLIC",
                        category: String? = nil,
+                       groupId: String? = nil,
                        attachments: [PickedAttachment] = []) async throws {
         var fields = ["body": body, "audience": audience]
         fields["category"] = category
+        fields["groupId"] = groupId
         _ = try await APIClient.shared.upload(APIEndpoints.Posts.root,
                                               fields: fields,
                                               files: attachments.uploadFiles,

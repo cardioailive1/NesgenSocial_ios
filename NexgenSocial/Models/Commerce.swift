@@ -12,6 +12,14 @@ struct JobPosting: Codable, Identifiable {
     var salaryMax: Int?
     var salaryCurrency: String?
     var salaryPeriod: String?
+    var responsibilities: String?
+    var requirements: String?
+    var applyUrl: String?
+    var companyLogoUrl: String?
+    var status: String?
+    var applicationCount: Int?
+    var isOwner: Bool?
+    var poster: User?
     var appliedByViewer: Bool?
     var createdAt: String?
 
@@ -35,11 +43,49 @@ struct MarketListing: Codable, Identifiable {
     var seller: User?
     var media: [MediaItem]?
     var coverUrl: String?
+    var status: String?
+    var photoCount: Int?
+    var videoCount: Int?
+    var createdAt: String?
 
     var priceText: String {
         String(format: "$%.2f", Double(priceCents) / 100.0)
     }
 }
 
+/// An application the viewer submitted. `job` is the trimmed copy the server
+/// returns here — not the full posting.
+struct JobApplication: Codable, Identifiable {
+    let id: String
+    var status: String
+    var coverLetter: String?
+    var resumeUrl: String?
+    var createdAt: String?
+    var job: JobSummary?
+
+    struct JobSummary: Codable {
+        let id: String
+        let title: String
+        let companyName: String
+        var location: String?
+        var arrangement: String?
+        var status: String?
+    }
+}
+
+/// An application seen from the employer's side, with the applicant attached.
+struct JobApplicant: Codable, Identifiable {
+    let id: String
+    var status: String
+    var coverLetter: String?
+    var resumeUrl: String?
+    var createdAt: String?
+    var applicant: User
+}
+
 struct JobsResponse: Codable { let jobs: [JobPosting] }
+struct JobResponse: Codable { let job: JobPosting }
+struct JobApplicationsResponse: Codable { let applications: [JobApplication] }
+struct JobApplicantsResponse: Codable { let applications: [JobApplicant] }
 struct ListingsResponse: Codable { let listings: [MarketListing] }
+struct ListingResponse: Codable { let listing: MarketListing }

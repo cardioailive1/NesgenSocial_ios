@@ -19,6 +19,14 @@ struct User: Codable, Identifiable, Hashable {
     var country: String?
     var followerCount: Int?
     var followingCount: Int?
+
+    // Only `/api/users` fills these in: the viewer's relationship to this
+    // person, so a list row can show the right buttons without a request per
+    // row. "NONE" | "PENDING" | "ACCEPTED" | "DECLINED".
+    var isFollowing: Bool?
+    var friendStatus: String?
+    var friendRequestIncoming: Bool?
+    var friendRequestId: String?
 }
 
 struct AuthResponse: Codable {

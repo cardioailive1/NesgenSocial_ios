@@ -138,15 +138,37 @@ enum APIEndpoints {
     }
 
     enum Marketplace {
+        static let root = "/api/marketplace"
         static func listings(query: String) -> String {
-            query.isEmpty ? "/api/marketplace" : "/api/marketplace?q=\(query.urlQueryEscaped)"
+            query.isEmpty ? root : "\(root)?q=\(query.urlQueryEscaped)"
         }
+        static func listing(_ id: String) -> String { "\(root)/\(id)" }
     }
 
     enum Jobs {
+        static let root = "/api/jobs"
+        static let mine = "/api/jobs/mine"
+        static let myApplications = "/api/jobs/applications/mine"
+
         static func search(_ query: String) -> String {
-            query.isEmpty ? "/api/jobs" : "/api/jobs?q=\(query.urlQueryEscaped)"
+            query.isEmpty ? root : "\(root)?q=\(query.urlQueryEscaped)"
         }
+
+        /// Browse with the same filters the web app sends. Empty values are
+        /// left out so the server falls back to "any".
+        static func browse(_ filters: [String: String]) -> String {
+            let query = filters
+                .filter { !$0.value.isEmpty }
+                .sorted { $0.key < $1.key }
+                .map { "\($0.key)=\($0.value.urlQueryEscaped)" }
+                .joined(separator: "&")
+            return query.isEmpty ? root : "\(root)?\(query)"
+        }
+
+        static func job(_ id: String) -> String { "\(root)/\(id)" }
+        static func apply(_ id: String) -> String { "\(root)/\(id)/apply" }
+        static func applicants(_ id: String) -> String { "\(root)/\(id)/applications" }
+        static func application(_ id: String) -> String { "\(root)/applications/\(id)" }
     }
 
     // MARK: - Monetisation

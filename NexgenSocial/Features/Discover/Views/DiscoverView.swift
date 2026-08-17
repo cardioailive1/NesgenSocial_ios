@@ -15,8 +15,9 @@ struct DiscoverView: View {
                         DiscoverRow(title: "Notifications", icon: "bell.fill") {
                             NotificationsView()
                         }
-                        DiscoverRow(title: "People, jobs, marketplace",
-                                    icon: "safari.fill") { ExploreView() }
+                        DiscoverRow(title: "People", icon: "person.crop.circle") { PeopleView() }
+                        DiscoverRow(title: "Jobs", icon: "briefcase.fill") { JobsView() }
+                        DiscoverRow(title: "Marketplace", icon: "bag.fill") { MarketplaceView() }
                         DiscoverRow(title: "Meet", icon: "video.bubble.fill") { MeetView() }
                         DiscoverRow(title: "Live", icon: "dot.radiowaves.left.and.right") {
                             LivestreamsView()
