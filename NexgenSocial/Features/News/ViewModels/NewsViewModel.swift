@@ -24,9 +24,15 @@ final class NewsViewModel: ObservableObject {
 @MainActor
 final class NewsroomsViewModel: ObservableObject {
     @Published private(set) var newsrooms: [Newsroom] = []
+    @Published var errorMessage: String?
 
     func load() async {
-        newsrooms = (try? await NewsService.newsrooms()) ?? []
+        do {
+            newsrooms = try await NewsService.newsrooms()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -34,18 +40,30 @@ final class NewsroomsViewModel: ObservableObject {
 final class NewsroomDetailViewModel: ObservableObject {
     @Published private(set) var newsroom: Newsroom?
     @Published private(set) var isFollowing = false
+    @Published var errorMessage: String?
 
     private let slug: String
 
     init(slug: String) { self.slug = slug }
 
     func load() async {
-        newsroom = try? await NewsService.newsroom(slug: slug)
-        isFollowing = newsroom?.followedByViewer ?? false
+        do {
+            let loaded = try await NewsService.newsroom(slug: slug)
+            newsroom = loaded
+            isFollowing = loaded.followedByViewer ?? false
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func toggleFollow(_ newsroom: Newsroom) async {
-        try? await NewsService.setFollowing(!isFollowing, newsroomId: newsroom.id)
         isFollowing.toggle()
+        do {
+            try await NewsService.setFollowing(isFollowing, newsroomId: newsroom.id)
+        } catch {
+            isFollowing.toggle()
+            errorMessage = error.localizedDescription
+        }
     }
 }

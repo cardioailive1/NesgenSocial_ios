@@ -13,7 +13,12 @@ final class ConnectionsViewModel: ObservableObject {
     }
 
     func load() async {
-        accounts = (try? await SocialAccountsService.accounts()) ?? []
+        do {
+            accounts = try await SocialAccountsService.accounts()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func connect(_ provider: String) async {

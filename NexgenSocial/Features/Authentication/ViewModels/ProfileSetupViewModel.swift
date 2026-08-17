@@ -45,7 +45,11 @@ final class ProfileSetupViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
 
-        allInterests = (try? await ProfileService.allInterests()) ?? []
+        do {
+            allInterests = try await ProfileService.allInterests()
+        } catch {
+            errorMessage = errorMessage ?? error.localizedDescription
+        }
     }
 
     func isSelected(_ interest: Interest) -> Bool {

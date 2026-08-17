@@ -217,22 +217,9 @@ extension CallService: PKPushRegistryDelegate {
                                   didUpdate credentials: PKPushCredentials,
                                   for type: PKPushType) {
         let token = credentials.token.map { String(format: "%02x", $0) }.joined()
-        Task {
-            _ = try? await APIClient.shared.post(
-                APIEndpoints.Push.voipSubscribe,
-                // Environment and bundle id matter as much here as they do
-                // for the normal APNs token: without them the server stores
-                // the device with a defaulted environment and can push a
-                // call to the wrong APNs host.
-                body: [
-                    "voipToken": token,
-                    "platform": "ios",
-                    "bundleId": Bundle.main.bundleIdentifier ?? "",
-                    "environment": AppEnvironment.isDebugBuild ? "sandbox" : "production",
-                ],
-                as: EmptyResponse.self
-            )
-        }
+        // Environment and bundle id matter as much here as they do for the
+        // normal APNs token, which is why both go through the same service.
+        Task { try? await PushSubscriptionService.subscribeVoIP(token: token) }
     }
 
     // Must be the completion-handler form. The `async` variant is not part

@@ -132,7 +132,7 @@ struct CircleDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Delete", role: .destructive) {
                     Task {
-                        await model.deleteCircle()
+                        guard await model.deleteCircle() else { return }
                         await onChanged()
                         dismiss()
                     }

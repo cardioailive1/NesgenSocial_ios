@@ -12,6 +12,9 @@ struct DiscoverView: View {
 
                 List {
                     Section {
+                        DiscoverRow(title: "Notifications", icon: "bell.fill") {
+                            NotificationsView()
+                        }
                         DiscoverRow(title: "People, jobs, marketplace",
                                     icon: "safari.fill") { ExploreView() }
                         DiscoverRow(title: "Meet", icon: "video.bubble.fill") { MeetView() }

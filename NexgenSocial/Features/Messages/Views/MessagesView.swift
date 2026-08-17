@@ -9,7 +9,10 @@ struct MessagesView: View {
         NavigationStack {
             ZStack {
                 Theme.navy950.ignoresSafeArea()
-                content
+                VStack(spacing: 0) {
+                    ErrorBanner(message: model.errorMessage)
+                    content
+                }
             }
             .navigationTitle("Messages")
             .searchable(text: $model.searchText,
@@ -21,6 +24,13 @@ struct MessagesView: View {
             .task {
                 await model.load()
                 await model.loadFriends()
+            }
+            // A message notification names its conversation; `RootView` only
+            // gets as far as this tab, so opening the thread happens here.
+            .onReceive(NotificationCenter.default.publisher(for: .openDeepLink)) { note in
+                guard let link = note.object as? String,
+                      case .messages(let id?) = DeepLink.parse(link) else { return }
+                Task { await model.open(conversationId: id) }
             }
         }
     }

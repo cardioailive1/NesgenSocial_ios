@@ -7,7 +7,12 @@ final class InviteViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     func load() async {
-        invites = (try? await SocialAccountsService.invites()) ?? []
+        do {
+            invites = try await SocialAccountsService.invites()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Returns the new invite so the view can open the share sheet on it.

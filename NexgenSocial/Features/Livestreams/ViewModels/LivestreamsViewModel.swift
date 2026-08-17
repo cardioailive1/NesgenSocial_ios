@@ -8,7 +8,12 @@ final class LivestreamsViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     func load() async {
-        streams = (try? await LivestreamsService.all()) ?? []
+        do {
+            streams = try await LivestreamsService.all()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func start() async {

@@ -4,13 +4,19 @@ import Foundation
 final class GroupsViewModel: ObservableObject {
     @Published private(set) var discover: [SocialGroup] = []
     @Published private(set) var mine: [SocialGroup] = []
+    @Published var errorMessage: String?
 
     func load() async {
-        async let all = try? GroupsService.all()
-        async let joined = try? GroupsService.mine()
-        mine = await joined ?? []
-        let mineIds = Set(mine.map(\.id))
-        discover = (await all ?? []).filter { !mineIds.contains($0.id) }
+        async let all = GroupsService.all()
+        async let joined = GroupsService.mine()
+        do {
+            mine = try await joined
+            let mineIds = Set(mine.map(\.id))
+            discover = try await all.filter { !mineIds.contains($0.id) }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -29,10 +35,15 @@ final class GroupDetailViewModel: ObservableObject {
     }
 
     func load() async {
-        async let loadedPosts = try? GroupsService.posts(in: group.id)
-        async let loadedMembers = try? GroupsService.members(of: group.id)
-        posts = await loadedPosts ?? []
-        members = await loadedMembers ?? []
+        async let loadedPosts = GroupsService.posts(in: group.id)
+        async let loadedMembers = GroupsService.members(of: group.id)
+        do {
+            posts = try await loadedPosts
+            members = try await loadedMembers
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func toggleMembership() async {

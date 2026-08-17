@@ -7,8 +7,13 @@ final class AdManagerViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     func load() async {
-        pricing = try? await AdsService.pricing()
-        ads = (try? await AdsService.mine()) ?? []
+        do {
+            pricing = try await AdsService.pricing()
+            ads = try await AdsService.mine()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -102,7 +107,12 @@ final class AudiencePlannerViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     func load() async {
-        allInterests = (try? await ProfileService.allInterests()) ?? []
+        do {
+            allInterests = try await ProfileService.allInterests()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func isSelected(_ interest: Interest) -> Bool {

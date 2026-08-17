@@ -4,13 +4,20 @@ import Foundation
 final class ReelsViewModel: ObservableObject {
     @Published var reels: [Reel] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
 
     func load() async {
         isLoading = true
         defer { isLoading = false }
-        reels = (try? await ReelsService.discover()) ?? []
+        do {
+            reels = try await ReelsService.discover()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
+    /// Analytics only: a dropped view report is not worth telling anyone about.
     func reportView(_ reel: Reel, watchedSec: Double, completed: Bool) async {
         try? await ReelsService.reportView(reelId: reel.id,
                                            watchedSec: watchedSec,

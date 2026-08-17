@@ -18,10 +18,11 @@ struct FeedView: View {
                                 .padding()
                                 .frame(maxWidth: .infinity)
                                 .card()
+                                .accessibilityIdentifier("error-banner")
                         }
 
                         ForEach(model.sponsored) { ad in
-                            SponsoredCard(ad: ad)
+                            SponsoredCard(ad: ad) { await model.trackAd($0, ad: ad) }
                         }
 
                         ForEach(model.posts) { post in

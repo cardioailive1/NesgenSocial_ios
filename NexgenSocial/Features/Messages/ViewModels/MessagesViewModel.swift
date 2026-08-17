@@ -37,7 +37,26 @@ final class MessagesViewModel: ObservableObject {
     /// Loaded once when the screen opens. The friend list is small and changes
     /// rarely, so searching it locally beats a request per keystroke.
     func loadFriends() async {
-        friends = (try? await FriendsService.friends()) ?? []
+        do {
+            friends = try await FriendsService.friends()
+        } catch {
+            // Doesn't clear an existing error: the conversation list failing
+            // is the more useful message of the two.
+            errorMessage = errorMessage ?? error.localizedDescription
+        }
+    }
+
+    /// Opens the conversation a `/messages/{id}` deep link points at.
+    ///
+    /// It comes out of the list rather than a request of its own because the
+    /// backend has no single-conversation route; the list is loaded first if
+    /// the screen hasn't got there yet. An id that isn't in the list — an old
+    /// notification for a deleted thread — leaves the user on the list.
+    func open(conversationId: String) async {
+        if conversations.isEmpty { await load() }
+        if let match = conversations.first(where: { $0.id == conversationId }) {
+            openedConversation = match
+        }
     }
 
     // MARK: - Search

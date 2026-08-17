@@ -18,10 +18,15 @@ final class PostDetailViewModel: ObservableObject {
     /// Comments and notes are independent, so they're fetched together rather
     /// than one after the other.
     func load() async {
-        async let loadedComments = try? PostsService.comments(for: post.id)
-        async let loadedNotes = try? PostsService.contextNotes(for: post.id)
-        comments = await loadedComments ?? []
-        notes = await loadedNotes ?? []
+        async let loadedComments = PostsService.comments(for: post.id)
+        async let loadedNotes = PostsService.contextNotes(for: post.id)
+        do {
+            comments = try await loadedComments
+            notes = try await loadedNotes
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func sendComment() async {
@@ -52,7 +57,11 @@ final class PostDetailViewModel: ObservableObject {
     }
 
     func vote(_ note: ContextNote, value: Int) async {
-        try? await PostsService.voteContextNote(note.id, value: value)
-        await load()
+        do {
+            try await PostsService.voteContextNote(note.id, value: value)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

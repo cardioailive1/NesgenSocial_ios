@@ -13,7 +13,12 @@ final class CelebrityViewModel: ObservableObject {
     var canPost: Bool { !draft.isEmpty || !attachments.isEmpty }
 
     func load() async {
-        posts = (try? await PostsService.explore(category: Self.category)) ?? []
+        do {
+            posts = try await PostsService.explore(category: Self.category)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func submit() async {

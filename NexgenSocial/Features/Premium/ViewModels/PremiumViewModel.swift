@@ -9,7 +9,12 @@ final class PremiumViewModel: ObservableObject {
     var isPremium: Bool { tier == "PREMIUM" }
 
     func load() async {
-        tier = (try? await PremiumService.currentTier()) ?? "FREE"
+        do {
+            tier = try await PremiumService.currentTier()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func toggleTier() async {

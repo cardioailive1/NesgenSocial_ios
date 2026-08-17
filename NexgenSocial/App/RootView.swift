@@ -62,9 +62,13 @@ struct MainTabView: View {
         .tint(Theme.cyan400)
         .task { await CallService.shared.pollForIncomingCalls() }
         .onReceive(NotificationCenter.default.publisher(for: .openDeepLink)) { note in
-            guard let path = note.object as? String else { return }
-            if path.contains("/messages") { selectedTab = 3 }
-            else if path.contains("/reels") { selectedTab = 1 }
+            // Picks the tab. Going deeper than that is up to the tab: each
+            // owns its own navigation stack, and `MessagesView` listens for
+            // the same notification to open the conversation named in the
+            // link. An unrecognised link leaves the user where they are.
+            guard let link = note.object as? String,
+                  let destination = DeepLink.parse(link) else { return }
+            selectedTab = destination.tab
         }
     }
 }

@@ -13,10 +13,14 @@ struct AdRow: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.slate400)
-                    .lineLimit(1)
+                // A campaign with none of these fields yet would otherwise
+                // reserve an empty line and sit taller than its neighbours.
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.slate400)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 0)
             Text(ad.active == true ? "LIVE" : (ad.paymentStatus ?? "DRAFT").uppercased())
@@ -35,7 +39,7 @@ struct AdRow: View {
         var parts: [String] = []
         if let category = ad.category { parts.append(category.capitalized) }
         if let budget = ad.budgetCents { parts.append(money(budget)) }
-        if let days = ad.durationDays { parts.append("\(days) days") }
+        if let days = ad.durationDays { parts.append("\(days) day\(days == 1 ? "" : "s")") }
         return parts.joined(separator: " · ")
     }
 }

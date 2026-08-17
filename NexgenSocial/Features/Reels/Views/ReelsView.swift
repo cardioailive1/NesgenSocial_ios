@@ -18,13 +18,14 @@ struct ReelsView: View {
 
                 if model.reels.isEmpty {
                     VStack(spacing: 10) {
-                        Image(systemName: "play.rectangle")
+                        Image(systemName: model.errorMessage == nil
+                              ? "play.rectangle" : "wifi.exclamationmark")
                             .font(.system(size: 40))
                             .foregroundStyle(Theme.slate400)
-                        Text("No reels yet")
+                        Text(model.errorMessage == nil ? "No reels yet" : "Couldn't load reels")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
-                        Text("Record the first one — reels reach people who don't follow you yet.")
+                        Text(model.errorMessage ?? "Record the first one — reels reach people who don't follow you yet.")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.slate400)
                             .multilineTextAlignment(.center)

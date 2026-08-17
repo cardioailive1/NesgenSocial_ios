@@ -16,6 +16,7 @@ struct ConversationView: View {
 
             VStack(spacing: 0) {
                 messageList
+                ErrorBanner(message: model.errorMessage)
                 composer
             }
         }
@@ -90,7 +91,11 @@ struct ConversationView: View {
 
     private func startCall(video: Bool) async {
         guard let user = model.otherUser else { return }
-        _ = try? await callService.startOutgoingCall(to: user, video: video)
+        do {
+            _ = try await callService.startOutgoingCall(to: user, video: video)
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
     }
 }
 

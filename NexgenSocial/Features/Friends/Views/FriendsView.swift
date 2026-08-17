@@ -16,6 +16,7 @@ struct FriendsView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.danger)
                             .padding(.horizontal, 14)
+                            .accessibilityIdentifier("error-banner")
                     }
 
                     if !model.incoming.isEmpty {

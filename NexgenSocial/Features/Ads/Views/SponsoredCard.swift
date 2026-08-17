@@ -5,6 +5,11 @@ import SwiftUI
 /// viewer, and hiding that would make the label meaningless.
 struct SponsoredCard: View {
     let ad: Ad
+    /// Impression and click reporting, routed back through the feed's view
+    /// model rather than called here: views don't reach the network directly
+    /// anywhere else in the app.
+    let record: (String) async -> Void
+
     @State private var recordedImpression = false
 
     var body: some View {
@@ -55,9 +60,5 @@ struct SponsoredCard: View {
             recordedImpression = true
             await record("IMPRESSION")
         }
-    }
-
-    private func record(_ type: String) async {
-        await AdsService.track(type, adId: ad.id)
     }
 }

@@ -20,15 +20,21 @@ final class ExploreViewModel: ObservableObject {
     @Published var listings: [MarketListing] = []
     @Published var searchText = ""
     @Published var section: Section = .people
+    @Published var errorMessage: String?
 
     /// Only the visible section is fetched. Loading all three on every
     /// keystroke would triple the traffic for results nobody is looking at.
     func load() async {
         let query = searchText.trimmingCharacters(in: .whitespaces)
-        switch section {
-        case .people: users = (try? await DiscoveryService.users(matching: query)) ?? []
-        case .jobs:   jobs = (try? await DiscoveryService.jobs(matching: query)) ?? []
-        case .market: listings = (try? await DiscoveryService.listings(matching: query)) ?? []
+        do {
+            switch section {
+            case .people: users = try await DiscoveryService.users(matching: query)
+            case .jobs:   jobs = try await DiscoveryService.jobs(matching: query)
+            case .market: listings = try await DiscoveryService.listings(matching: query)
+            }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

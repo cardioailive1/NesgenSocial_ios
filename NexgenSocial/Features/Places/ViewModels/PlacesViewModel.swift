@@ -10,7 +10,12 @@ final class PlacesViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     func load() async {
-        places = (try? await ProfileService.places()) ?? []
+        do {
+            places = try await ProfileService.places()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func search() async {

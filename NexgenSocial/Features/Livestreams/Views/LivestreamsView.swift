@@ -74,7 +74,9 @@ struct LivestreamsView: View {
             Button("Cancel", role: .cancel) {}
         }
         .fullScreenCover(item: $model.watching) { stream in
-            LivestreamRoomView(stream: stream) { await model.load() }
+            LivestreamRoomView(stream: stream,
+                               onEnded: { await model.load() },
+                               onEndFailed: { model.errorMessage = $0 })
         }
         .task { await model.load() }
     }
@@ -95,6 +97,9 @@ struct LivestreamsView: View {
 struct LivestreamRoomView: View {
     let stream: Livestream
     let onEnded: () async -> Void
+    /// Ending the stream is reported back to the list, which owns the error
+    /// line; this room is dismissed by the time it would be shown.
+    let onEndFailed: (String) -> Void
 
     @ObservedObject private var webRTC = WebRTCManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -142,7 +147,11 @@ struct LivestreamRoomView: View {
     private func leave() async {
         webRTC.disconnect()
         if isHost {
-            try? await LivestreamsService.end(stream.id)
+            do {
+                try await LivestreamsService.end(stream.id)
+            } catch {
+                onEndFailed(error.localizedDescription)
+            }
         }
         await onEnded()
         dismiss()

@@ -24,21 +24,33 @@ enum APIError: LocalizedError {
 /// from many screens concurrently, and this removes a whole class of data
 /// races without scattering locks through the app.
 actor APIClient {
-    static let shared = APIClient()
+    /// Every service reaches the network through this one instance.
+    ///
+    /// It is a `var` so tests can point the whole app at a stubbed
+    /// `URLSession` — see `StubAPI` in the test target. Nothing in the app
+    /// itself ever assigns to it; `nonisolated(unsafe)` says exactly that,
+    /// since a test swaps it once before any request is in flight.
+    nonisolated(unsafe) static var shared = APIClient()
 
     /// Change this to point at a local backend during development.
     static let baseURL = "https://nexgensocial-udp.fly.dev"
 
     private let session: URLSession
 
-    private init() {
+    /// `session` is injectable only so tests can hand in a `URLProtocol`-backed
+    /// one. The app always takes the default.
+    init(session: URLSession = APIClient.defaultSession()) {
+        self.session = session
+    }
+
+    static func defaultSession() -> URLSession {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         // Uploads of video can be slow on cellular; a short resource
         // timeout would abort legitimate posts midway.
         config.timeoutIntervalForResource = 300
         config.waitsForConnectivity = true
-        session = URLSession(configuration: config)
+        return URLSession(configuration: config)
     }
 
     // MARK: - Token

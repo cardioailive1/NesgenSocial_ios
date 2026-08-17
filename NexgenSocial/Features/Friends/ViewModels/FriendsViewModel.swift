@@ -9,11 +9,17 @@ final class FriendsViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     func load() async {
-        if let response = try? await FriendsService.overview() {
+        do {
+            let response = try await FriendsService.overview()
             incoming = response.incomingRequests
             sent = response.sentRequests
             friends = response.friends
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
         }
+        // Suggestions are a nice-to-have: losing them shouldn't overwrite a
+        // more useful error, or produce one of their own.
         suggestions = (try? await FriendsService.suggestions()) ?? []
     }
 
@@ -40,12 +46,20 @@ final class FriendsViewModel: ObservableObject {
     }
 
     func cancel(_ request: FriendRequest) async {
-        try? await FriendsService.cancelRequest(request.id)
-        await load()
+        do {
+            try await FriendsService.cancelRequest(request.id)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func remove(_ friend: User) async {
-        try? await FriendsService.remove(friend.id)
-        await load()
+        do {
+            try await FriendsService.remove(friend.id)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

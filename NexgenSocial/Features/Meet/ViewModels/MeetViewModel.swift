@@ -11,7 +11,12 @@ final class MeetViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
-        meetings = (try? await MeetingsService.all()) ?? []
+        do {
+            meetings = try await MeetingsService.all()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func joinByCode() async {
@@ -82,6 +87,8 @@ final class MeetingRoomViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
 
             // Host arriving marks the meeting live for everyone else.
+            // Bookkeeping for other participants' list view; failing it
+            // shouldn't stop the host entering their own meeting.
             if isHost { try? await MeetingsService.start(meeting.id) }
             joined = true
             await WebRTCManager.shared.connectToMeeting(meetingId: meeting.id)
@@ -92,6 +99,8 @@ final class MeetingRoomViewModel: ObservableObject {
 
     func leave() async {
         WebRTCManager.shared.disconnect()
+        // The screen is already going away, so there is nowhere to show a
+        // failure; the transport is disconnected either way.
         if joined { try? await MeetingsService.exit(meeting.id, isHost: isHost) }
     }
 }

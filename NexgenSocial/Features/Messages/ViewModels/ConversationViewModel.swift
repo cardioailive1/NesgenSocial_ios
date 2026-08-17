@@ -20,12 +20,30 @@ final class ConversationViewModel: ObservableObject {
     var otherUser: User? { conversation.otherUser }
     var canSend: Bool { !draft.isEmpty || !attachments.isEmpty }
 
+    /// Which side of the thread a message is drawn on.
+    ///
+    /// A message with no `sender` used to come out as *mine* — `nil != otherId`
+    /// is true — which drew someone else's message in the viewer's own bubble.
+    /// Unknown now falls on the safer side.
+    ///
+    /// ponytail: infers ownership from "not the other participant", which is
+    /// only right for a 1:1 thread. The API marks group conversations with
+    /// `isGroup`, which the app neither decodes nor offers a way to create;
+    /// compare against the signed-in user's id if group chats ever ship.
     func isMine(_ message: Message) -> Bool {
-        message.sender?.id != conversation.otherUser?.id
+        guard let senderId = message.sender?.id else { return false }
+        return senderId != conversation.otherUser?.id
     }
 
     func load() async {
-        messages = (try? await MessagesService.messages(in: conversation.id)) ?? []
+        do {
+            messages = try await MessagesService.messages(in: conversation.id)
+            errorMessage = nil
+        } catch {
+            // Keeps whatever is already on screen: a dropped poll shouldn't
+            // blank the history. The next poll clears the message.
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Polling keeps this simple and predictable. A socket would be

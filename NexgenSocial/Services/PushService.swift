@@ -49,25 +49,12 @@ final class PushService: NSObject, ObservableObject {
     private func sendTokenToServer(_ token: String) async {
         // Fails quietly: an unreachable server shouldn't produce an error
         // dialog on launch. It re-registers next time the app opens.
-        _ = try? await APIClient.shared.post(
-            APIEndpoints.Push.apnsSubscribe,
-            body: [
-                "deviceToken": token,
-                "platform": "ios",
-                "bundleId": Bundle.main.bundleIdentifier ?? "",
-                "environment": AppEnvironment.isDebugBuild ? "sandbox" : "production",
-            ],
-            as: EmptyResponse.self
-        )
+        try? await PushSubscriptionService.subscribeAPNs(deviceToken: token)
     }
 
     func unregister() async {
         guard let deviceToken else { return }
-        _ = try? await APIClient.shared.post(
-            APIEndpoints.Push.apnsUnsubscribe,
-            body: ["deviceToken": deviceToken],
-            as: EmptyResponse.self
-        )
+        try? await PushSubscriptionService.unsubscribeAPNs(deviceToken: deviceToken)
         self.deviceToken = nil
     }
 }

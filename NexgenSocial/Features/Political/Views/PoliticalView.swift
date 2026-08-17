@@ -20,6 +20,8 @@ struct PoliticalView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 14)
 
+                    ErrorBanner(message: model.errorMessage)
+
                     if model.pages.isEmpty {
                         Text("No pages here yet.")
                             .font(.system(size: 13))

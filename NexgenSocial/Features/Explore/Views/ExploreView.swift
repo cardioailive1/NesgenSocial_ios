@@ -17,10 +17,12 @@ struct ExploreView: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 8)
 
+                ErrorBanner(message: model.errorMessage)
+
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         switch model.section {
-                        case .people: ForEach(model.users) { PeopleRow(user: $0) }
+                        case .people: ForEach(model.users) { PeopleRow(user: $0, model: model) }
                         case .jobs:   ForEach(model.jobs) { JobRow(job: $0) }
                         case .market: ForEach(model.listings) { ListingRow(listing: $0) }
                         }
@@ -39,6 +41,7 @@ struct ExploreView: View {
 
 struct PeopleRow: View {
     let user: User
+    @ObservedObject var model: ExploreViewModel
     @State private var isFollowing = false
 
     var body: some View {
@@ -55,15 +58,23 @@ struct PeopleRow: View {
             }
             Spacer()
             Button(isFollowing ? "Following" : "Follow") {
-                Task {
-                    try? await DiscoveryService.setFollowing(!isFollowing, username: user.username)
-                    isFollowing.toggle()
-                }
+                Task { await toggleFollow() }
             }
             .buttonStyle(GhostButtonStyle())
         }
         .padding(12)
         .card()
+    }
+
+    /// Flips first and puts it back if the call fails, like the like button.
+    private func toggleFollow() async {
+        isFollowing.toggle()
+        do {
+            try await DiscoveryService.setFollowing(isFollowing, username: user.username)
+        } catch {
+            isFollowing.toggle()
+            model.errorMessage = error.localizedDescription
+        }
     }
 }
 
