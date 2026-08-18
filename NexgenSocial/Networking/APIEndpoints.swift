@@ -13,6 +13,7 @@ enum APIEndpoints {
         static let me       = "/api/auth/me"
         static let login    = "/api/auth/login"
         static let register = "/api/auth/register"
+        static let forgotPassword = "/api/auth/forgot-password"
     }
 
     enum Profile {
@@ -54,6 +55,7 @@ enum APIEndpoints {
     enum Calls {
         static let root     = "/api/messages/calls"
         static let incoming = "/api/messages/calls/incoming"
+        static let history  = "/api/messages/calls/history"
         static func call(_ id: String) -> String { "/api/messages/calls/\(id)" }
         static func details(_ id: String) -> String { "/api/messages/calls/\(id)/details" }
     }
@@ -120,6 +122,7 @@ enum APIEndpoints {
         static let pages = "/api/political/pages"
         static func posts(_ id: String) -> String { "/api/political/pages/\(id)/posts" }
         static func follow(_ id: String) -> String { "/api/political/pages/\(id)/follow" }
+        static let archive = "/api/political/archive"
     }
 
     enum Livestreams {

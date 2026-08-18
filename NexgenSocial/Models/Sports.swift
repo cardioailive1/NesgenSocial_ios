@@ -42,6 +42,7 @@ struct SportsEvent: Codable, Identifiable, Hashable {
     var status: String?
     var isLive: Bool?
     var league: String?
+    var broadcastUrl: String?
 
     var scoreLine: String {
         guard let home = homeScore?.text, let away = awayScore?.text else { return "" }

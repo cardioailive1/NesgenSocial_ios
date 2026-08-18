@@ -1,5 +1,12 @@
 import Foundation
 
+enum MessagesTab: String, CaseIterable, Identifiable {
+    case chats = "Chats"
+    case calls = "Calls"
+
+    var id: String { rawValue }
+}
+
 /// Drives the conversation list plus the "start a new chat" friend search.
 ///
 /// Both live here rather than in separate models because they share one piece
@@ -11,6 +18,12 @@ final class MessagesViewModel: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    /// Which half of the tab is on screen. Calls live here rather than on a
+    /// screen of their own because they are the same list of people, reached
+    /// the same way.
+    @Published var tab: MessagesTab = .chats
+    @Published var calls: [Call] = []
 
     /// What the user typed. Filters the conversation list in place, and is
     /// also what `matchingFriends` searches against.
@@ -31,6 +44,17 @@ final class MessagesViewModel: ObservableObject {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Call history, newest first. Loaded with the rest of the screen rather
+    /// than on tab switch: it's one small request, and switching tabs to a
+    /// spinner reads as slower than it is.
+    func loadCalls() async {
+        do {
+            calls = try await CallsService.history()
+        } catch {
+            errorMessage = errorMessage ?? error.localizedDescription
         }
     }
 
@@ -76,6 +100,13 @@ final class MessagesViewModel: ObservableObject {
         guard isSearching else { return [] }
         let existing = Set(conversations.compactMap { $0.otherUser?.id })
         return friends.filter { !existing.contains($0.id) && $0.matches(trimmedQuery) }
+    }
+
+    /// Calls matching the search field. Takes the viewer's id because which
+    /// party a row is "about" depends on which side of the call they were on.
+    func filteredCalls(forUserId userId: String?) -> [Call] {
+        guard isSearching else { return calls }
+        return calls.filter { $0.otherParty(forUserId: userId)?.matches(trimmedQuery) ?? false }
     }
 
     private var trimmedQuery: String {

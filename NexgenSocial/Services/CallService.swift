@@ -23,6 +23,11 @@ final class CallService: NSObject, ObservableObject {
     @Published var activeCall: Call?
     @Published var isCallActive = false
 
+    /// When the call was actually answered, so the in-call timer counts talk
+    /// time rather than time since dialling. Nil while a call is still
+    /// ringing, which is what the call screen shows "Ringing…" for.
+    @Published var connectedAt: Date?
+
     /// Loaded while the CallKit ringer is up, so answering can present
     /// immediately instead of waiting on a network round trip.
     private var pendingCall: Call?
@@ -30,6 +35,9 @@ final class CallService: NSObject, ObservableObject {
     /// Stops the poll from ringing the same call over and over while the
     /// server still reports it RINGING.
     private var lastReportedCallId: String?
+    /// Watches a call we placed. The caller gets no CallKit callback when the
+    /// far end declines or never picks up, so the record itself is polled.
+    private var outgoingWatch: Task<Void, Never>?
 
     private let provider: CXProvider
     private let callController = CXCallController()
@@ -88,16 +96,74 @@ final class CallService: NSObject, ObservableObject {
         let call = try await CallsService.start(with: user.username, video: video)
 
         let uuid = UUID()
-        currentCallUUID = uuid
         let handle = CXHandle(type: .generic, value: user.displayName)
         let action = CXStartCallAction(call: uuid, handle: handle)
         action.isVideo = video
 
-        try await callController.request(CXTransaction(action: action))
+        do {
+            try await callController.request(CXTransaction(action: action))
+        } catch {
+            // `currentCallUUID` is set only once CallKit has accepted the
+            // call: leaving it set after a refused transaction stops
+            // `pollForIncomingCalls` from ever ringing again, which silently
+            // kills incoming calls for the rest of the session.
+            try? await CallsService.setStatus("ENDED", callId: call.id)
+            throw error
+        }
+
+        currentCallUUID = uuid
         activeCall = call
         pendingCallId = call.id
         isCallActive = true
+        // Not connected yet -- the callee still has to answer.
+        connectedAt = nil
+        watchOutgoing(callId: call.id)
         return call
+    }
+
+    /// Polls a placed call until it stops ringing.
+    ///
+    /// Nothing else tells the caller what happened: a decline, a hang-up from
+    /// the other side, or a call nobody picks up all leave the caller sitting
+    /// on the call screen forever. This is also the only place that reports
+    /// MISSED -- without it those records stay RINGING until they age out of
+    /// the server's incoming window.
+    private func watchOutgoing(callId: String) {
+        outgoingWatch?.cancel()
+        outgoingWatch = Task { @MainActor [weak self] in
+            let ringDeadline = Date().addingTimeInterval(60)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                guard let self, !Task.isCancelled else { return }
+
+                let call = try? await CallsService.details(callId)
+
+                switch call?.status {
+                case "ACTIVE":
+                    if self.connectedAt == nil { self.connectedAt = Date() }
+                    self.activeCall = call
+                case "DECLINED", "ENDED", "MISSED":
+                    // The server already holds the final status; clearing the
+                    // ids first stops the end action from patching over a
+                    // DECLINED with an ENDED.
+                    self.activeCall = nil
+                    self.pendingCallId = nil
+                    self.endCall()
+                    return
+                default:
+                    // Still RINGING, or the status request failed -- a
+                    // transient failure shouldn't drop a live call, so only
+                    // the ring deadline ends things here.
+                    if Date() >= ringDeadline {
+                        try? await CallsService.setStatus("MISSED", callId: callId)
+                        self.activeCall = nil
+                        self.pendingCallId = nil
+                        self.endCall()
+                        return
+                    }
+                }
+            }
+        }
     }
 
     /// Only asks CallKit to end the call. Reporting ENDED to the server and
@@ -155,8 +221,12 @@ final class CallService: NSObject, ObservableObject {
 extension CallService: CXProviderDelegate {
     nonisolated func providerDidReset(_ provider: CXProvider) {
         Task { @MainActor in
+            outgoingWatch?.cancel()
+            outgoingWatch = nil
             activeCall = nil
             isCallActive = false
+            connectedAt = nil
+            currentCallUUID = nil
         }
     }
 
@@ -170,6 +240,7 @@ extension CallService: CXProviderDelegate {
             }
             activeCall = pendingCall
             isCallActive = true
+            connectedAt = Date()
             if let callId = activeCall?.id {
                 try? await CallsService.setStatus("ACTIVE", callId: callId)
             }
@@ -183,6 +254,8 @@ extension CallService: CXProviderDelegate {
             // point the call was never answered, so `activeCall` is nil.
             // Reporting only on `activeCall` left those calls stuck RINGING
             // on the server until they aged out.
+            outgoingWatch?.cancel()
+            outgoingWatch = nil
             let wasAnswered = activeCall != nil
             if let callId = activeCall?.id ?? pendingCallId {
                 try? await CallsService.setStatus(wasAnswered ? "ENDED" : "DECLINED",
@@ -192,6 +265,7 @@ extension CallService: CXProviderDelegate {
             pendingCall = nil
             pendingCallId = nil
             isCallActive = false
+            connectedAt = nil
             currentCallUUID = nil
             action.fulfill()
         }

@@ -47,6 +47,7 @@ struct SignInForm: View {
     @State private var email = ""
     @State private var password = ""
     @State private var busy = false
+    @State private var showForgotPassword = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -80,9 +81,96 @@ struct SignInForm: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(busy || email.isEmpty || password.isEmpty)
+
+            Button("Forgot your password?") {
+                session.errorMessage = nil
+                showForgotPassword = true
+            }
+            .font(.system(size: 12.5))
+            .foregroundStyle(Theme.cyan300)
         }
         .padding(18)
         .card()
+        .sheet(isPresented: $showForgotPassword) { ForgotPasswordView() }
+    }
+}
+
+/// Requests the reset email. Choosing the new password happens on the web
+/// page the emailed link opens — the token lives in that link, so there is
+/// nothing for the app to do in between.
+struct ForgotPasswordView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var busy = false
+    @State private var sent = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    if sent {
+                        Text("If an account exists for \(email), we've sent a link to choose a new password. It expires in an hour.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.slate300)
+                        Text("Nothing arrived? Check your spam folder, and make sure you used the address you signed up with. Delivery can take a couple of minutes.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.slate400)
+                        Button("Back to sign in") { dismiss() }
+                            .buttonStyle(PrimaryButtonStyle())
+                    } else {
+                        Text("Enter the email address on your account and we'll send you a link to set a new password.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.slate400)
+
+                        TextField("Email address", text: $email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .fieldStyle()
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.danger)
+                        }
+
+                        Button {
+                            Task { await send() }
+                        } label: {
+                            Text(busy ? "Sending…" : "Send reset link").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(busy || !email.contains("@"))
+                    }
+                    Spacer()
+                }
+                .padding(18)
+            }
+            .navigationTitle("Reset your password")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(Theme.cyan400)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.tint(Theme.slate400)
+                }
+            }
+        }
+    }
+
+    private func send() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await AuthService.forgotPassword(email: email.trimmingCharacters(in: .whitespaces))
+            errorMessage = nil
+            sent = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

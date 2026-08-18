@@ -1,9 +1,12 @@
 import SwiftUI
+import PhotosUI
 
 /// Fixtures and scores per league, plus a live-now strip across all
 /// leagues. Data comes from TheSportsDB via the backend's cached proxy.
+/// Below that, community talk: the SPORTS category of the normal post feed.
 struct SportsView: View {
     @StateObject private var model = SportsViewModel()
+    @State private var selectedItems: [PhotosPickerItem] = []
 
     var body: some View {
         ZStack {
@@ -75,23 +78,76 @@ struct SportsView: View {
                     if let recent = model.scores?.recent, !recent.isEmpty {
                         SectionHeader("Results")
                         ForEach(recent) { event in
-                            EventCard(event: event).padding(.horizontal, 14)
+                            EventCard(event: event, broadcastUrl: model.scores?.broadcastUrl)
+                                .padding(.horizontal, 14)
                         }
+                    }
+
+                    SectionHeader("Community talk")
+                    composer.padding(.horizontal, 14)
+
+                    ForEach(model.posts) { post in
+                        NavigationLink {
+                            PostDetailView(post: post)
+                        } label: {
+                            PostCard(post: post) { await model.toggleLike(post) }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 14)
                     }
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.loadScores() }
+            .refreshable {
+                await model.loadScores()
+                await model.loadPosts()
+            }
         }
         .navigationTitle("Sports")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await model.loadAll() }
+        .tint(Theme.cyan400)
+        .task {
+            await model.loadAll()
+            await model.loadPosts()
+        }
         .onChange(of: model.selectedLeague) { _, _ in Task { await model.loadScores() } }
+    }
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Talk sports…", text: $model.draft, axis: .vertical)
+                .lineLimit(2...5)
+                .fieldStyle()
+
+            AttachmentStrip(attachments: $model.attachments, thumbnailSize: 56)
+
+            HStack {
+                PhotosPicker(selection: $selectedItems, maxSelectionCount: 10,
+                             matching: .any(of: [.images, .videos])) {
+                    Image(systemName: "photo.on.rectangle")
+                        .foregroundStyle(Theme.cyan400)
+                }
+                Spacer()
+                Button(model.isPosting ? "Posting…" : "Post") { Task { await model.submit() } }
+                    .disabled(model.isPosting || !model.canPost)
+            }
+        }
+        .padding(14)
+        .card()
+        .onChange(of: selectedItems) { _, items in
+            Task {
+                model.attachments += await AttachmentLoader.load(items)
+                selectedItems = []
+            }
+        }
     }
 }
 
 struct EventCard: View {
     let event: SportsEvent
+    /// League-wide fallback: the provider only gives a broadcaster per league
+    /// most of the time, not per fixture.
+    var broadcastUrl: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -120,6 +176,11 @@ struct EventCard: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.slate400)
                     .lineLimit(1)
+            }
+            if let link = URL(string: event.broadcastUrl ?? broadcastUrl ?? "") {
+                Link("Where to watch (official broadcaster)", destination: link)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.cyan300)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

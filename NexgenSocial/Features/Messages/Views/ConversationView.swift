@@ -41,7 +41,16 @@ struct ConversationView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    ForEach(model.messages) { message in
+                    ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
+                        if let day = dayLabel(at: index) {
+                            Text(day)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Theme.slate400)
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(Theme.navy900)
+                                .clipShape(Capsule())
+                                .padding(.vertical, 6)
+                        }
                         MessageBubble(message: message, isMine: model.isMine(message))
                             .id(message.id)
                     }
@@ -52,6 +61,13 @@ struct ConversationView: View {
                 withAnimation { proxy.scrollTo(model.messages.last?.id, anchor: .bottom) }
             }
         }
+    }
+
+    /// A day heading, shown only on the first message of each day.
+    private func dayLabel(at index: Int) -> String? {
+        guard let label = ServerDate.dayLabel(model.messages[index].createdAt) else { return nil }
+        guard index > 0 else { return label }
+        return ServerDate.dayLabel(model.messages[index - 1].createdAt) == label ? nil : label
     }
 
     private var composer: some View {
@@ -103,24 +119,124 @@ struct MessageBubble: View {
     let message: Message
     let isMine: Bool
 
+    /// Keeps a long message off both edges of the screen instead of letting
+    /// one paragraph stretch the full width, which is what makes a wall of
+    /// text unreadable.
+    private let maxBubbleWidth: CGFloat = 290
+
+    private var textColor: Color { isMine ? Theme.navy950 : .white }
+
+    private var photosAndVideos: [MediaItem] {
+        (message.attachments ?? []).filter { $0.kind != .file }
+    }
+
+    private var files: [MediaItem] {
+        (message.attachments ?? []).filter { $0.kind == .file }
+    }
+
     var body: some View {
         HStack {
-            if isMine { Spacer(minLength: 50) }
-            VStack(alignment: .leading, spacing: 6) {
+            if isMine { Spacer(minLength: 44) }
+
+            VStack(alignment: .leading, spacing: 8) {
+                if !photosAndVideos.isEmpty {
+                    MediaCarousel(items: photosAndVideos)
+                        .frame(maxWidth: maxBubbleWidth)
+                }
+
+                ForEach(files) { file in
+                    FileAttachmentCard(item: file, onDark: !isMine)
+                        .frame(maxWidth: maxBubbleWidth)
+                }
+
                 if let body = message.body, !body.isEmpty {
                     Text(body)
-                        .font(.system(size: 14.5))
-                        .foregroundStyle(isMine ? Theme.navy950 : .white)
+                        .font(.system(size: 15))
+                        // Long messages wrap and keep their line breaks
+                        // rather than being clipped to one line.
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .foregroundStyle(textColor)
                 }
-                if let attachments = message.attachments, !attachments.isEmpty {
-                    MediaCarousel(items: attachments)
-                        .frame(maxWidth: 240)
+
+                if let time = ServerDate.clockTime(message.createdAt) {
+                    Text(time)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(isMine ? Theme.navy950.opacity(0.65) : Theme.slate400)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
+            .frame(maxWidth: maxBubbleWidth, alignment: .leading)
             .background(isMine ? Theme.cyan400 : Theme.navy800)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            if !isMine { Spacer(minLength: 50) }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isMine ? Color.clear : Theme.line, lineWidth: 1)
+            )
+
+            if !isMine { Spacer(minLength: 44) }
         }
+    }
+}
+
+/// A non-media attachment: a PDF, a document, an archive.
+///
+/// ponytail: the server only stores PHOTO and VIDEO today, so nothing decodes
+/// to `.file` yet -- this is what renders the moment it does, rather than an
+/// empty bubble. Tapping opens the file in the system browser, which handles
+/// preview and "save to Files" without a QuickLook stack here.
+struct FileAttachmentCard: View {
+    let item: MediaItem
+    let onDark: Bool
+
+    @Environment(\.openURL) private var openURL
+
+    private var filename: String {
+        let name = (item.url as NSString).lastPathComponent
+        return name.isEmpty ? "Attachment" : name
+    }
+
+    /// Icon per file type -- a spreadsheet and a zip shouldn't look alike.
+    private var icon: String {
+        switch (item.url as NSString).pathExtension.lowercased() {
+        case "pdf":                          return "doc.richtext"
+        case "doc", "docx", "rtf", "txt":    return "doc.text"
+        case "xls", "xlsx", "csv", "numbers":return "tablecells"
+        case "ppt", "pptx", "key":           return "rectangle.on.rectangle"
+        case "zip", "rar", "7z", "tar", "gz":return "doc.zipper"
+        case "mp3", "m4a", "wav", "aac":     return "waveform"
+        default:                             return "doc"
+        }
+    }
+
+    var body: some View {
+        Button {
+            if let url = APIClient.mediaURL(item.url) { openURL(url) }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .frame(width: 38, height: 38)
+                    .background(onDark ? Theme.navy950 : Theme.navy950.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(filename)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(item.caption ?? "Tap to open")
+                        .font(.system(size: 11))
+                        .opacity(0.75)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(onDark ? Color.white : Theme.navy950)
+            .padding(8)
+            .background(onDark ? Theme.navy900 : Color.white.opacity(0.25))
+            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }

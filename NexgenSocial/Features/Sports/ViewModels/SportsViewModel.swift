@@ -11,6 +11,51 @@ final class SportsViewModel: ObservableObject {
     @Published var selectedLeague = ""
     @Published var errorMessage: String?
 
+    /// Community talk is just the SPORTS category of the normal post feed —
+    /// same store the web screen reads and writes.
+    @Published private(set) var posts: [Post] = []
+    @Published var draft = ""
+    @Published var attachments: [PickedAttachment] = []
+    @Published private(set) var isPosting = false
+
+    private static let category = "SPORTS"
+
+    var canPost: Bool { !draft.isEmpty || !attachments.isEmpty }
+
+    func loadPosts() async {
+        do {
+            posts = try await PostsService.explore(category: Self.category)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func submit() async {
+        guard canPost, !isPosting else { return }
+        isPosting = true
+        defer { isPosting = false }
+        do {
+            try await PostsService.create(body: draft,
+                                          category: Self.category,
+                                          attachments: attachments)
+            draft = ""
+            attachments = []
+            await loadPosts()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func toggleLike(_ post: Post) async {
+        guard let index = posts.firstIndex(where: { $0.id == post.id }) else { return }
+        posts[index].toggleLikeLocally()
+        do {
+            try await PostsService.setLiked(posts[index].isLiked, postId: post.id)
+        } catch {
+            posts[index].toggleLikeLocally()
+        }
+    }
+
     func loadAll() async {
         async let loadedLeagues = SportsService.leagues()
         async let loadedLive = SportsService.live()

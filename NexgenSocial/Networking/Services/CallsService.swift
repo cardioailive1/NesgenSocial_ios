@@ -15,6 +15,11 @@ enum CallsService {
         try await APIClient.shared.get(APIEndpoints.Calls.incoming, as: IncomingCallResponse.self).call
     }
 
+    /// Both sides of every call, newest first (the server caps it at 50).
+    static func history() async throws -> [Call] {
+        try await APIClient.shared.get(APIEndpoints.Calls.history, as: CallsResponse.self).calls
+    }
+
     static func details(_ callId: String) async throws -> Call {
         try await APIClient.shared.get(APIEndpoints.Calls.details(callId), as: CallResponse.self).call
     }

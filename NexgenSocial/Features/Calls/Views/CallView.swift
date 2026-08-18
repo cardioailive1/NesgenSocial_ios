@@ -8,17 +8,21 @@ import WebRTC
 struct CallView: View {
     let call: Call
     @EnvironmentObject var callService: CallService
+    @EnvironmentObject var session: AuthSession
     @ObservedObject private var webRTC = WebRTCManager.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var isMuted = false
     @State private var isCameraOff = false
-    @State private var elapsed = 0
 
     private var other: User? {
-        // Whichever party isn't us. Falls back to caller so the screen
-        // never renders nameless.
-        call.callee ?? call.caller
+        // Whichever party isn't us. On an answered incoming call the record
+        // carries both parties, so picking `callee` blindly showed the user
+        // their own name and avatar. Falls back to caller so the screen never
+        // renders nameless.
+        let me = session.currentUser?.id
+        if me == call.calleeId { return call.caller ?? call.callee }
+        return call.callee ?? call.caller
     }
 
     var body: some View {
@@ -44,9 +48,24 @@ struct CallView: View {
                         .foregroundStyle(.white)
                 }
 
-                Text(timeString)
-                    .font(.system(size: 14, design: .monospaced))
-                    .foregroundStyle(Theme.slate400)
+                // Counts talk time, not time since dialling: an outgoing call
+                // is on screen while it rings, and a ringing call has no
+                // duration yet.
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(timeString(at: context.date))
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundStyle(Theme.slate400)
+                }
+
+                // A media failure otherwise looks exactly like a call the
+                // other side simply hasn't picked up.
+                if let problem = webRTC.lastError {
+                    Text(problem)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.danger)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
 
                 Spacer()
 
@@ -96,16 +115,14 @@ struct CallView: View {
         }
         .task {
             await WebRTCManager.shared.connect(callId: call.id, video: call.kind == "VIDEO")
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                elapsed += 1
-            }
         }
         .onDisappear { WebRTCManager.shared.disconnect() }
     }
 
-    private var timeString: String {
-        String(format: "%02d:%02d", elapsed / 60, elapsed % 60)
+    private func timeString(at now: Date) -> String {
+        guard let start = callService.connectedAt else { return "Ringing…" }
+        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 }
 

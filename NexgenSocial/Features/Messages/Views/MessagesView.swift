@@ -4,26 +4,42 @@ import SwiftUI
 /// friends the user hasn't messaged yet.
 struct MessagesView: View {
     @StateObject private var model = MessagesViewModel()
+    @EnvironmentObject private var session: AuthSession
+    @EnvironmentObject private var callService: CallService
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.navy950.ignoresSafeArea()
                 VStack(spacing: 0) {
+                    Picker("", selection: $model.tab) {
+                        ForEach(MessagesTab.allCases) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
+
                     ErrorBanner(message: model.errorMessage)
-                    content
+
+                    switch model.tab {
+                    case .chats: content
+                    case .calls: callsList
+                    }
                 }
             }
             .navigationTitle("Messages")
             .searchable(text: $model.searchText,
                         placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "Search chats and friends")
+                        prompt: model.tab == .chats ? "Search chats and friends" : "Search calls")
             .navigationDestination(item: $model.openedConversation) { conversation in
                 ConversationView(conversation: conversation)
             }
             .task {
                 await model.load()
                 await model.loadFriends()
+                await model.loadCalls()
             }
             // A message notification names its conversation; `RootView` only
             // gets as far as this tab, so opening the thread happens here.
@@ -80,6 +96,48 @@ struct MessagesView: View {
         }
     }
 
+    /// Call history. Tapping a row calls that person back the same way they
+    /// were reached before -- video rows redial video.
+    @ViewBuilder
+    private var callsList: some View {
+        let calls = model.filteredCalls(forUserId: session.currentUser?.id)
+
+        if calls.isEmpty {
+            VStack(spacing: 8) {
+                Text(model.isSearching ? "No matching calls" : "No calls yet")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Open a chat and tap the phone or video button to start one.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.slate400)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            .frame(maxHeight: .infinity)
+        } else {
+            List(calls) { call in
+                Button {
+                    Task { await redial(call) }
+                } label: {
+                    CallHistoryRow(call: call, viewerId: session.currentUser?.id)
+                }
+                .listRowBackground(Theme.navy900)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .refreshable { await model.loadCalls() }
+        }
+    }
+
+    private func redial(_ call: Call) async {
+        guard let user = call.otherParty(forUserId: session.currentUser?.id) else { return }
+        do {
+            _ = try await callService.startOutgoingCall(to: user, video: call.isVideo)
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Text(model.isSearching ? "No matches" : "No conversations yet")
@@ -126,6 +184,46 @@ private struct ConversationRow: View {
                     .padding(.horizontal, 7).padding(.vertical, 3)
                     .background(Theme.cyan400)
                     .clipShape(Capsule())
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct CallHistoryRow: View {
+    let call: Call
+    let viewerId: String?
+
+    private var missed: Bool { call.wasMissed(forUserId: viewerId) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarView(url: call.otherParty(forUserId: viewerId)?.avatarUrl,
+                       seed: call.otherParty(forUserId: viewerId)?.username ?? "?", size: 44)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(call.otherParty(forUserId: viewerId)?.displayName ?? "Unknown")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(missed ? Theme.danger : .white)
+                HStack(spacing: 5) {
+                    Image(systemName: call.isOutgoing(forUserId: viewerId)
+                          ? "arrow.up.right" : "arrow.down.left")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(call.summary(forUserId: viewerId))
+                        .font(.system(size: 12))
+                }
+                .foregroundStyle(missed ? Theme.danger : Theme.slate400)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(ServerDate.listTime(call.startedAt) ?? "")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.slate400)
+                Image(systemName: call.isVideo ? "video.fill" : "phone.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.cyan400)
             }
         }
         .padding(.vertical, 4)

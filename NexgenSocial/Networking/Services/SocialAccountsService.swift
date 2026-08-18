@@ -23,9 +23,13 @@ enum SocialAccountsService {
             .get(APIEndpoints.SocialAccounts.invites, as: InvitesResponse.self).invites
     }
 
-    static func createInvite(channel: String = "link") async throws -> Invite {
-        try await APIClient.shared.post(APIEndpoints.SocialAccounts.invites,
-                                        body: ["channel": channel],
-                                        as: InviteResponse.self).invite
+    /// `contact` is what the invite was addressed to (an email address), so
+    /// each recipient can be tracked separately in the sent list.
+    static func createInvite(channel: String = "link", contact: String? = nil) async throws -> Invite {
+        var body: [String: Any] = ["channel": channel]
+        body["contact"] = contact
+        return try await APIClient.shared.post(APIEndpoints.SocialAccounts.invites,
+                                               body: body,
+                                               as: InviteResponse.self).invite
     }
 }

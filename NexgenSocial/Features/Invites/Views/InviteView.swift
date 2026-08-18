@@ -8,6 +8,8 @@ import SwiftUI
 struct InviteView: View {
     @StateObject private var model = InviteViewModel()
     @State private var shareLink: ShareLink?
+    @State private var emails = ""
+    @Environment(\.openURL) private var openURL
 
     /// Wrapper so `.sheet(item:)` has something Identifiable to key on.
     struct ShareLink: Identifiable {
@@ -35,6 +37,36 @@ struct InviteView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.cyan400)
                         .disabled(model.isCreating)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Invite contacts by email")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text("Paste as many addresses as you like — commas, spaces or new lines. Everyone goes on BCC, so your contacts never see each other's addresses.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.slate400)
+
+                        TextField("ama@example.com, kofi@example.com", text: $emails, axis: .vertical)
+                            .lineLimit(3...6)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.emailAddress)
+                            .fieldStyle()
+
+                        Button("Create invites & open mail") {
+                            Task { await sendEmails() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.cyan400)
+                        .disabled(model.isCreating || emails.isEmpty)
+
+                        Text("This opens your own mail app with the message ready to send — we don't send mail on your behalf or store your contacts.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.slate400)
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -92,6 +124,12 @@ struct InviteView: View {
 
     private func link(for invite: Invite) -> URL? {
         URL(string: "\(AppConfig.websiteURL)/signup?ref=\(invite.token)")
+    }
+
+    private func sendEmails() async {
+        guard let url = await model.createEmailInvites(emails) else { return }
+        emails = ""
+        openURL(url)
     }
 
     private func create() async {

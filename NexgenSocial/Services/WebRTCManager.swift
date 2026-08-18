@@ -27,6 +27,9 @@ final class WebRTCManager: NSObject, ObservableObject {
     @Published private(set) var remoteVideoTrack: RTCVideoTrack?
     @Published private(set) var localVideoTrack: RTCVideoTrack?
     @Published private(set) var isConnected = false
+    /// Why media never came up, for the call screen to show. A silent
+    /// failure here is indistinguishable from a call nobody answers.
+    @Published private(set) var lastError: String?
 
     private var webSocket: URLSessionWebSocketTask?
 
@@ -72,6 +75,24 @@ final class WebRTCManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Off-main execution
+    //
+    // libmediasoupclient's create/produce/consume calls are synchronous and
+    // block the calling thread until their delegate callback comes back --
+    // and those callbacks hop to the main actor to send a signalling
+    // request. Calling them ON the main actor therefore deadlocks: the main
+    // thread waits for a callback that is queued behind itself. The whole
+    // call screen freezes, buttons included, which is exactly what that
+    // looks like from the outside.
+    private nonisolated func offMain<T>(_ work: @escaping () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do { continuation.resume(returning: try work()) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
     // MARK: - Connect
 
     func connect(callId: String, video: Bool) async {
@@ -84,6 +105,7 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     private func join(roomId: String, video: Bool) async {
         guard webSocket == nil else { return }
+        lastError = nil
 
         if !Self.clientInitialized {
             MediasoupClient.initialize()
@@ -111,7 +133,8 @@ final class WebRTCManager: NSObject, ObservableObject {
             }
 
             let device = Device(pcFactory: Self.factory)
-            try device.load(with: Self.jsonString(capabilities))
+            let capabilitiesJSON = Self.jsonString(capabilities)
+            try await offMain { try device.load(with: capabilitiesJSON) }
             self.device = device
 
             try await createSendTransport()
@@ -134,6 +157,7 @@ final class WebRTCManager: NSObject, ObservableObject {
         } catch {
             print("WebRTC join failed: \(error)")
             disconnect()
+            lastError = error.localizedDescription
         }
     }
 
@@ -145,14 +169,17 @@ final class WebRTCManager: NSObject, ObservableObject {
         handler.manager = self
         sendHandler = handler
 
-        let transport = try device.createSendTransport(
-            id: try Self.string(params, "id"),
-            iceParameters: Self.jsonString(params["iceParameters"] ?? [:]),
-            iceCandidates: Self.jsonString(params["iceCandidates"] ?? []),
-            dtlsParameters: Self.jsonString(params["dtlsParameters"] ?? [:]),
-            sctpParameters: nil,
-            appData: nil
-        )
+        let id = try Self.string(params, "id")
+        let ice = Self.jsonString(params["iceParameters"] ?? [:])
+        let candidates = Self.jsonString(params["iceCandidates"] ?? [])
+        let dtls = Self.jsonString(params["dtlsParameters"] ?? [:])
+
+        let transport = try await offMain {
+            try device.createSendTransport(
+                id: id, iceParameters: ice, iceCandidates: candidates,
+                dtlsParameters: dtls, sctpParameters: nil, appData: nil
+            )
+        }
         transport.delegate = handler
         sendTransport = transport
     }
@@ -165,13 +192,17 @@ final class WebRTCManager: NSObject, ObservableObject {
         handler.manager = self
         receiveHandler = handler
 
-        let transport = try device.createReceiveTransport(
-            id: try Self.string(params, "id"),
-            iceParameters: Self.jsonString(params["iceParameters"] ?? [:]),
-            iceCandidates: Self.jsonString(params["iceCandidates"] ?? []),
-            dtlsParameters: Self.jsonString(params["dtlsParameters"] ?? [:]),
-            appData: nil
-        )
+        let id = try Self.string(params, "id")
+        let ice = Self.jsonString(params["iceParameters"] ?? [:])
+        let candidates = Self.jsonString(params["iceCandidates"] ?? [])
+        let dtls = Self.jsonString(params["dtlsParameters"] ?? [:])
+
+        let transport = try await offMain {
+            try device.createReceiveTransport(
+                id: id, iceParameters: ice, iceCandidates: candidates,
+                dtlsParameters: dtls, appData: nil
+            )
+        }
         transport.delegate = handler
         receiveTransport = transport
     }
@@ -183,9 +214,11 @@ final class WebRTCManager: NSObject, ObservableObject {
 
         let audioSource = Self.factory.audioSource(with: nil)
         let audioTrack = Self.factory.audioTrack(with: audioSource, trackId: "ngs-audio")
-        audioProducer = try sendTransport.createProducer(
-            for: audioTrack, encodings: nil, codecOptions: nil, codec: nil, appData: nil
-        )
+        audioProducer = try await offMain {
+            try sendTransport.createProducer(
+                for: audioTrack, encodings: nil, codecOptions: nil, codec: nil, appData: nil
+            )
+        }
 
         guard video else { return }
 
@@ -196,9 +229,11 @@ final class WebRTCManager: NSObject, ObservableObject {
 
         let videoTrack = Self.factory.videoTrack(with: videoSource, trackId: "ngs-video")
         localVideoTrack = videoTrack
-        videoProducer = try sendTransport.createProducer(
-            for: videoTrack, encodings: nil, codecOptions: nil, codec: nil, appData: nil
-        )
+        videoProducer = try await offMain {
+            try sendTransport.createProducer(
+                for: videoTrack, encodings: nil, codecOptions: nil, codec: nil, appData: nil
+            )
+        }
     }
 
     private func startCapture(_ capturer: RTCCameraVideoCapturer) {
@@ -235,13 +270,17 @@ final class WebRTCManager: NSObject, ObservableObject {
             ])
 
             let consumerId = try Self.string(reply, "id")
-            let consumer = try receiveTransport.consume(
-                consumerId: consumerId,
-                producerId: producerId,
-                kind: kind == "audio" ? .audio : .video,
-                rtpParameters: Self.jsonString(reply["rtpParameters"] ?? [:]),
-                appData: nil
-            )
+            let rtpParameters = Self.jsonString(reply["rtpParameters"] ?? [:])
+            let mediaKind: MediaKind = kind == "audio" ? .audio : .video
+            let consumer = try await offMain {
+                try receiveTransport.consume(
+                    consumerId: consumerId,
+                    producerId: producerId,
+                    kind: mediaKind,
+                    rtpParameters: rtpParameters,
+                    appData: nil
+                )
+            }
             consumers[consumerId] = consumer
 
             // The server creates every consumer paused so the client can
@@ -322,6 +361,13 @@ final class WebRTCManager: NSObject, ObservableObject {
 
         return try await withCheckedThrowingContinuation { continuation in
             pending[reqId] = continuation
+            // A reply that never arrives has to fail eventually. Without
+            // this the continuation hangs forever, and every caller of
+            // `join` hangs with it -- which froze the whole call screen.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(15))
+                self?.resumePending(reqId, with: .failure(SignalingError.timedOut))
+            }
             webSocket.send(.string(text)) { [weak self] error in
                 guard let error else { return }
                 Task { @MainActor in self?.resumePending(reqId, with: .failure(error)) }
@@ -414,6 +460,7 @@ final class WebRTCManager: NSObject, ObservableObject {
 enum SignalingError: LocalizedError {
     case notReady
     case disconnected
+    case timedOut
     case server(String)
     case badReply(String)
 
@@ -421,6 +468,7 @@ enum SignalingError: LocalizedError {
         switch self {
         case .notReady:              return "The call isn't connected yet."
         case .disconnected:          return "The call disconnected."
+        case .timedOut:              return "The call server didn't respond."
         case .server(let message):   return message
         case .badReply(let detail):  return "Unexpected signalling reply (\(detail))."
         }
