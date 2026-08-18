@@ -60,6 +60,7 @@ struct MainTabView: View {
                 .tag(4)
         }
         .tint(Theme.cyan400)
+        .task { await MediaPermissions.requestAll() }
         .task { await CallService.shared.pollForIncomingCalls() }
         .onReceive(NotificationCenter.default.publisher(for: .openDeepLink)) { note in
             // Picks the tab. Going deeper than that is up to the tab: each

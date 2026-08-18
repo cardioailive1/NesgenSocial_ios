@@ -14,6 +14,7 @@ struct CallView: View {
 
     @State private var isMuted = false
     @State private var isCameraOff = false
+    @State private var permissionProblem: String?
 
     private var other: User? {
         // Whichever party isn't us. On an answered incoming call the record
@@ -59,7 +60,17 @@ struct CallView: View {
 
                 // A media failure otherwise looks exactly like a call the
                 // other side simply hasn't picked up.
-                if let problem = webRTC.lastError {
+                if let problem = permissionProblem {
+                    Text(problem)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.danger)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+
+                    Button("Open Settings") { MediaPermissions.openSettings() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.cyan400)
+                } else if let problem = webRTC.lastError {
                     Text(problem)
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.danger)
@@ -114,7 +125,13 @@ struct CallView: View {
             }
         }
         .task {
-            await WebRTCManager.shared.connect(callId: call.id, video: call.kind == "VIDEO")
+            let video = call.kind == "VIDEO"
+            // Re-checked here rather than trusted from sign-in: access can be
+            // revoked in Settings at any time, and connecting without it
+            // leaves the other side on a silent, frozen call.
+            permissionProblem = MediaPermissions.message(video: video)
+            guard permissionProblem == nil else { return }
+            await WebRTCManager.shared.connect(callId: call.id, video: video)
         }
         .onDisappear { WebRTCManager.shared.disconnect() }
     }

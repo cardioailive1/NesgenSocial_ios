@@ -93,6 +93,12 @@ final class CallService: NSObject, ObservableObject {
     }
 
     func startOutgoingCall(to user: User, video: Bool) async throws -> Call {
+        // Checked before the server call: placing it first would ring the
+        // other side for a call this device can't carry audio on.
+        if let problem = MediaPermissions.message(video: video) {
+            throw CallPermissionError(message: problem)
+        }
+
         let call = try await CallsService.start(with: user.username, video: video)
 
         let uuid = UUID()
@@ -324,4 +330,9 @@ extension CallService: PKPushRegistryDelegate {
 
 extension Notification.Name {
     static let callAudioSessionActivated = Notification.Name("callAudioSessionActivated")
+}
+
+struct CallPermissionError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
 }
