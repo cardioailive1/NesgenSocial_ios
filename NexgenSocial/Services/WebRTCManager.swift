@@ -96,16 +96,35 @@ final class WebRTCManager: NSObject, ObservableObject {
     // MARK: - Connect
 
     func connect(callId: String, video: Bool) async {
-        await join(roomId: "call-\(callId)", video: video)
+        await join(roomId: "call-\(callId)", role: "host", video: video, publish: true)
     }
 
     func connectToMeeting(meetingId: String, video: Bool = true) async {
-        await join(roomId: "meet-\(meetingId)", video: video)
+        await join(roomId: "meet-\(meetingId)", role: "host", video: video, publish: true)
     }
 
-    private func join(roomId: String, video: Bool) async {
+    /// A livestream room is the stream id with no prefix, and the server
+    /// only lets the stream's owner join as "host" or publish anything --
+    /// joining a stream the way a meeting is joined was rejected outright,
+    /// so no stream ever came up on the phone.
+    func connectToLivestream(streamId: String, asHost: Bool) async {
+        await join(roomId: streamId, role: asHost ? "host" : "viewer",
+                   video: asHost, publish: asHost)
+    }
+
+    private func join(roomId: String, role: String, video: Bool, publish: Bool) async {
         guard webSocket == nil else { return }
         lastError = nil
+
+        // Checked before anything is opened: a publisher without access
+        // otherwise joins the room and sits there mute and blank, which
+        // reads as the other side's fault.
+        if publish, let problem = MediaPermissions.message(video: video) {
+            lastError = problem
+            return
+        }
+
+        configureAudioSession(roomId: roomId, publish: publish)
 
         if !Self.clientInitialized {
             MediasoupClient.initialize()
@@ -124,7 +143,7 @@ final class WebRTCManager: NSObject, ObservableObject {
             // broadcast where only the host does.
             let joined = try await request("join", [
                 "roomId": roomId,
-                "role": "host",
+                "role": role,
                 "token": token,
             ])
 
@@ -139,7 +158,10 @@ final class WebRTCManager: NSObject, ObservableObject {
 
             try await createSendTransport()
             try await createReceiveTransport()
-            try await publishLocalMedia(video: video)
+            // A livestream viewer consumes only: the server rejects
+            // `produce` from a non-host there, and that rejection used to
+            // take the whole join down with it.
+            if publish { try await publishLocalMedia(video: video) }
 
             isConnected = true
 
@@ -205,6 +227,26 @@ final class WebRTCManager: NSObject, ObservableObject {
         }
         transport.delegate = handler
         receiveTransport = transport
+    }
+
+    /// Calls get their session from CallKit, which activates it and posts
+    /// `.callAudioSessionActivated`. Meetings and livestreams never touch
+    /// CallKit, so nothing ever flipped `isAudioEnabled` back on for them
+    /// and they ran completely silent in both directions.
+    private func configureAudioSession(roomId: String, publish: Bool) {
+        guard !roomId.hasPrefix("call-") else { return }
+
+        let session = AVAudioSession.sharedInstance()
+        if publish {
+            try? session.setCategory(.playAndRecord, mode: .voiceChat,
+                                     options: [.allowBluetoothHFP, .defaultToSpeaker])
+        } else {
+            // A viewer records nothing, and `.playAndRecord` would light up
+            // the mic indicator for someone who is only watching.
+            try? session.setCategory(.playback, mode: .moviePlayback)
+        }
+        try? session.setActive(true)
+        RTCAudioSession.sharedInstance().isAudioEnabled = true
     }
 
     // MARK: - Local media

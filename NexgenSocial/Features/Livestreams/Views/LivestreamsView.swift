@@ -91,9 +91,6 @@ struct LivestreamsView: View {
 
 /// Watching or hosting a stream. The SFU room id follows the same
 /// convention as calls and meetings.
-// ponytail: viewers publish nothing, but the transport publishes for
-// everyone because WebRTCManager.join always produces. Add a
-// receive-only path there if bandwidth from viewers becomes a problem.
 struct LivestreamRoomView: View {
     let stream: Livestream
     let onEnded: () async -> Void
@@ -132,7 +129,10 @@ struct LivestreamRoomView: View {
                 }
                 .padding(16)
                 Spacer()
-                if webRTC.remoteVideoTrack == nil && !isHost {
+                if let problem = webRTC.lastError {
+                    MediaErrorNotice(message: problem)
+                    Spacer()
+                } else if webRTC.remoteVideoTrack == nil && !isHost {
                     Text("Connecting to the stream…")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.slate400)
@@ -140,7 +140,7 @@ struct LivestreamRoomView: View {
                 }
             }
         }
-        .task { await webRTC.connectToMeeting(meetingId: stream.id) }
+        .task { await webRTC.connectToLivestream(streamId: stream.id, asHost: isHost) }
         .onDisappear { webRTC.disconnect() }
     }
 

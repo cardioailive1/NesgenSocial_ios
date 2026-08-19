@@ -199,6 +199,12 @@ struct MeetingRoomView: View {
                         .foregroundStyle(Theme.danger)
                 }
 
+                // Joining the room can succeed while media fails; without
+                // this the screen just sits on "Connecting…" forever.
+                if let problem = webRTC.lastError {
+                    MediaErrorNotice(message: problem)
+                }
+
                 Spacer()
 
                 HStack(spacing: 26) {

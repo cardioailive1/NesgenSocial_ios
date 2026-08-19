@@ -60,22 +60,8 @@ struct CallView: View {
 
                 // A media failure otherwise looks exactly like a call the
                 // other side simply hasn't picked up.
-                if let problem = permissionProblem {
-                    Text(problem)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.danger)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-
-                    Button("Open Settings") { MediaPermissions.openSettings() }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.cyan400)
-                } else if let problem = webRTC.lastError {
-                    Text(problem)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.danger)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                if let problem = permissionProblem ?? webRTC.lastError {
+                    MediaErrorNotice(message: problem)
                 }
 
                 Spacer()
@@ -186,5 +172,28 @@ struct CallButton: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.slate400)
         }
+    }
+}
+
+/// A media failure with the way out of it. Access revoked in Settings is by
+/// far the most common cause, and the button is useless noise for the rest,
+/// so it only appears when access really is the problem.
+struct MediaErrorNotice: View {
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.danger)
+                .multilineTextAlignment(.center)
+
+            if message.contains("Settings") {
+                Button("Open Settings") { MediaPermissions.openSettings() }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.cyan400)
+            }
+        }
+        .padding(.horizontal, 32)
     }
 }
