@@ -26,7 +26,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // VoIP registration must happen at launch, not lazily: iOS only
         // delivers call pushes to an app that registered before the push
         // arrived.
-        Task { @MainActor in CallService.shared.registerForVoIPPushes() }
+        // Synchronously, not in a Task: a Task defers registration to a later
+        // runloop turn, and a cold launch caused by a VoIP push delivers that
+        // push before the turn arrives -- which terminates the app. This
+        // delegate method already runs on the main actor.
+        MainActor.assumeIsolated { CallService.shared.registerForVoIPPushes() }
         return true
     }
 

@@ -58,7 +58,9 @@ final class CallService: NSObject, ObservableObject {
     /// far end declines or never picks up, so the record itself is polled.
     private var outgoingWatch: Task<Void, Never>?
 
-    private let provider: CXProvider
+    /// `nonisolated` because the PushKit delegate must report a call before
+    /// it returns, and hopping to the main actor first is too late.
+    nonisolated private let provider: CXProvider
     private let callController = CXCallController()
     private var pushRegistry: PKPushRegistry?
     private var currentCallUUID: UUID?
@@ -85,12 +87,14 @@ final class CallService: NSObject, ObservableObject {
     }
 
     /// Presents an incoming call on the system UI.
-    func reportIncomingCall(callId: String, callerName: String, hasVideo: Bool,
-                            completion: (() -> Void)? = nil) {
+    ///
+    /// Must stay synchronous up to `reportNewIncomingCall`: PushKit checks
+    /// for a reported call as soon as its delegate method returns, and
+    /// terminates the app if there isn't one. Any `await` before the report
+    /// is an abort in `_terminateAppIfThereAreUnhandledVoIPPushes`.
+    nonisolated func reportIncomingCall(callId: String, callerName: String, hasVideo: Bool,
+                                        completion: (() -> Void)? = nil) {
         let uuid = UUID()
-        currentCallUUID = uuid
-        pendingCallId = callId
-        pendingCall = nil
 
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: callerName)
@@ -103,12 +107,15 @@ final class CallService: NSObject, ObservableObject {
         provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
             if let error {
                 print("CallKit reportNewIncomingCall failed: \(error.localizedDescription)")
-            } else {
-                Task { @MainActor in
-                    await self?.loadCall(callId)
-                }
             }
-            completion?()
+            Task { @MainActor in
+                guard let self else { completion?(); return }
+                self.currentCallUUID = uuid
+                self.pendingCallId = callId
+                self.pendingCall = nil
+                if error == nil { await self.loadCall(callId) }
+                completion?()
+            }
         }
     }
 
@@ -388,14 +395,13 @@ extension CallService: PKPushRegistryDelegate {
         let callerName = info["callerName"] as? String ?? "Incoming call"
         let hasVideo = (info["kind"] as? String) == "VIDEO"
 
-        Task { @MainActor in
-            // completion() only after CallKit has been told about the call;
-            // calling it earlier is what trips the termination check.
-            CallService.shared.reportIncomingCall(callId: callId,
-                                                  callerName: callerName,
-                                                  hasVideo: hasVideo,
-                                                  completion: completion)
-        }
+        // Reported inline on PushKit's own queue -- `self` is the registry
+        // delegate, so there is no need to reach for the singleton, and no
+        // actor hop to delay the report past the termination check.
+        reportIncomingCall(callId: callId,
+                           callerName: callerName,
+                           hasVideo: hasVideo,
+                           completion: completion)
     }
 }
 
