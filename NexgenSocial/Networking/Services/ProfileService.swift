@@ -13,6 +13,28 @@ enum ProfileService {
                                              as: ProfileResponse.self)
     }
 
+    /// Public profile plus follower/following/friend counts.
+    static func profile(_ username: String) async throws -> UserProfileResponse {
+        try await APIClient.shared.get(APIEndpoints.Users.profile(username),
+                                       as: UserProfileResponse.self)
+    }
+
+    /// Permanently removes the account and everything attached to it. There
+    /// is no undo and no grace period -- the server deletes on the spot.
+    static func deleteAccount() async throws {
+        _ = try await APIClient.shared.delete(APIEndpoints.Users.me)
+    }
+
+    /// The avatar route takes the file under the field name `avatar`, not the
+    /// `media` name the post and message uploads use.
+    static func uploadAvatar(_ image: PickedAttachment) async throws -> User {
+        try await APIClient.shared.upload(
+            APIEndpoints.Users.avatar,
+            files: [(name: "avatar", filename: image.filename,
+                     mimeType: image.mimeType, data: image.data)],
+            as: MeResponse.self).user
+    }
+
     static func allInterests() async throws -> [Interest] {
         try await APIClient.shared
             .get(APIEndpoints.Profile.interests, as: InterestsResponse.self).interests

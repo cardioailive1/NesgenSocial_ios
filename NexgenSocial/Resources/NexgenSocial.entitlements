@@ -2,10 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Change to "production" for App Store builds. Leaving this on
-         development means push silently stops working after release. -->
+    <!-- Driven by the APS_ENVIRONMENT build setting: development for Debug,
+         production for Release. Hardcoding it is how push silently stops
+         working the moment the app ships. -->
     <key>aps-environment</key>
-    <string>development</string>
+    <string>$(APS_ENVIRONMENT)</string>
 
     <key>com.apple.developer.usernotifications.communication</key>
     <true/>

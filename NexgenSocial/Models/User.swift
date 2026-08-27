@@ -76,3 +76,23 @@ struct ProfileMeResponse: Codable {
 struct ProfileResponse: Codable { let profile: ExtendedProfile }
 struct PrivacyResponse: Codable { let privacySettings: PrivacySettings }
 struct InterestsResponse: Codable { let interests: [Interest] }
+
+/// `GET /api/users/:username` -- the public profile with its counts. The
+/// counts live outside `user` because they're computed per request rather
+/// than stored on the row.
+struct ProfileStats: Codable {
+    var followerCount: Int?
+    var followingCount: Int?
+    var friendCount: Int?
+}
+
+struct ViewerContext: Codable {
+    var isFollowing: Bool?
+    var friendStatus: String?
+}
+
+struct UserProfileResponse: Codable {
+    let user: User
+    var stats: ProfileStats?
+    var viewerContext: ViewerContext?
+}

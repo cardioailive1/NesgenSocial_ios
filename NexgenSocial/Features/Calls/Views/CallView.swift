@@ -10,10 +10,12 @@ struct CallView: View {
     @EnvironmentObject var callService: CallService
     @EnvironmentObject var session: AuthSession
     @ObservedObject private var webRTC = WebRTCManager.shared
-    @Environment(\.dismiss) private var dismiss
 
     @State private var isMuted = false
     @State private var isCameraOff = false
+    // Matches `configureAudioSession`, which activates the session with
+    // `.defaultToSpeaker`.
+    @State private var isSpeakerOn = true
     @State private var permissionProblem: String?
 
     private var other: User? {
@@ -52,10 +54,16 @@ struct CallView: View {
                 // Counts talk time, not time since dialling: an outgoing call
                 // is on screen while it rings, and a ringing call has no
                 // duration yet.
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(timeString(at: context.date))
-                        .font(.system(size: 14, design: .monospaced))
+                if let notice = callService.endedNotice {
+                    Text(notice)
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.slate400)
+                } else {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(timeString(at: context.date))
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundStyle(Theme.slate400)
+                    }
                 }
 
                 // A media failure otherwise looks exactly like a call the
@@ -66,12 +74,19 @@ struct CallView: View {
 
                 Spacer()
 
-                HStack(spacing: 26) {
+                HStack(spacing: 20) {
                     CallButton(icon: isMuted ? "mic.slash.fill" : "mic.fill",
                                label: isMuted ? "Unmute" : "Mute",
                                background: Theme.navy800) {
                         isMuted.toggle()
                         WebRTCManager.shared.setMuted(isMuted)
+                    }
+
+                    CallButton(icon: isSpeakerOn ? "speaker.wave.2.fill" : "speaker.fill",
+                               label: isSpeakerOn ? "Speaker" : "Earpiece",
+                               background: Theme.navy800) {
+                        isSpeakerOn.toggle()
+                        callService.setSpeaker(isSpeakerOn)
                     }
 
                     if call.kind == "VIDEO" {
@@ -85,11 +100,13 @@ struct CallView: View {
 
                     CallButton(icon: "phone.down.fill", label: "End",
                                background: Theme.danger) {
+                        // No `dismiss()`: the screen stays up showing why the
+                        // call ended, and `activeCall` clearing takes it down.
                         callService.endCall()
-                        dismiss()
                     }
                 }
                 .padding(.bottom, 50)
+                .disabled(callService.endedNotice != nil)
             }
 
             if let local = webRTC.localVideoTrack, !isCameraOff {

@@ -12,6 +12,13 @@ enum PostsService {
             .get(APIEndpoints.Posts.explore(category: category), as: FeedResponse.self).posts
     }
 
+    /// One person's own posts, newest first. Only the owner sees their
+    /// non-public ones -- the server decides that from the token.
+    static func posts(byUsername username: String) async throws -> [Post] {
+        try await APIClient.shared
+            .get(APIEndpoints.Posts.by(username: username), as: FeedResponse.self).posts
+    }
+
     static func create(body: String,
                        audience: String = "PUBLIC",
                        category: String? = nil,

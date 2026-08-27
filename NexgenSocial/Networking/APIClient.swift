@@ -155,6 +155,22 @@ actor APIClient {
         try await perform(makeRequest(path, method: "DELETE"), as: EmptyResponse.self)
     }
 
+    /// POST that reports the status code and the raw body instead of
+    /// mapping them onto `APIError`. Used by push registration, where the
+    /// point of the call is to record exactly what the server said -- the
+    /// normal path throws away the status code and the response body, which
+    /// are the only two things that explain a push that never arrives.
+    func postRaw(_ path: String, body: [String: Any]) async throws -> (status: Int, body: String) {
+        let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data("{}".utf8)
+        let request = try makeRequest(path, method: "POST", body: data)
+        let (responseData, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        // Mirrors `perform`: a dead token has to be cleared here too, or the
+        // app keeps a credential it has already been told is invalid.
+        if status == 401 { setToken(nil) }
+        return (status, String(data: responseData, encoding: .utf8) ?? "<non-utf8 \(responseData.count) bytes>")
+    }
+
     // MARK: - Multipart upload
 
     /// Uploads files alongside form fields. Built by hand rather than with a

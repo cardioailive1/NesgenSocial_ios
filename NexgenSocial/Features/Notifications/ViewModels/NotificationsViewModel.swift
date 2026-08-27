@@ -17,7 +17,10 @@ final class NotificationsViewModel: ObservableObject {
 
     func load() async {
         let center = UNUserNotificationCenter.current()
-        permissionGranted = await center.notificationSettings().authorizationStatus == .authorized
+        // Matches PushService: provisional and ephemeral deliver too, so
+        // treating them as denied would show a "turn on notifications"
+        // prompt to someone already receiving them.
+        permissionGranted = await PushService.shared.isAuthorized
         items = await center.deliveredNotifications().sorted { $0.date > $1.date }
     }
 

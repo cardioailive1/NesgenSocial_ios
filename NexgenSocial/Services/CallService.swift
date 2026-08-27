@@ -28,6 +28,25 @@ final class CallService: NSObject, ObservableObject {
     /// ringing, which is what the call screen shows "Ringing…" for.
     @Published var connectedAt: Date?
 
+    /// Set the moment a call is over, while the call screen is still up. The
+    /// screen otherwise vanished the instant the other side hung up, which
+    /// reads as a crash rather than as the call ending.
+    @Published var endedNotice: String?
+
+    /// Ringback for the caller. The callee hears CallKit's ringer; without
+    /// this the caller heard nothing at all until the call was answered.
+    private let ringback = Ringback()
+
+    /// True from the moment we place a call until the far end answers or the
+    /// call ends. The ringback can only play once CallKit has activated the
+    /// audio session, and that callback can land either side of the call
+    /// being set up, so both paths check this rather than call order.
+    private var wantsRingback = false
+
+    /// Set when the final status is already on the server, so the end action
+    /// doesn't patch a DECLINED back to an ENDED.
+    private var suppressStatusReport = false
+
     /// Loaded while the CallKit ringer is up, so answering can present
     /// immediately instead of waiting on a network round trip.
     private var pendingCall: Call?
@@ -58,6 +77,7 @@ final class CallService: NSObject, ObservableObject {
     }
 
     func registerForVoIPPushes() {
+        PushLog.write("registering PKPushRegistry for VoIP pushes")
         let registry = PKPushRegistry(queue: .main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
@@ -106,9 +126,11 @@ final class CallService: NSObject, ObservableObject {
         let action = CXStartCallAction(call: uuid, handle: handle)
         action.isVideo = video
 
+        wantsRingback = true
         do {
             try await callController.request(CXTransaction(action: action))
         } catch {
+            stopRingback()
             // `currentCallUUID` is set only once CallKit has accepted the
             // call: leaving it set after a refused transaction stops
             // `pollForIncomingCalls` from ever ringing again, which silently
@@ -123,6 +145,10 @@ final class CallService: NSObject, ObservableObject {
         isCallActive = true
         // Not connected yet -- the callee still has to answer.
         connectedAt = nil
+        endedNotice = nil
+        // If the session was already active this starts the tone now;
+        // otherwise `didActivate` does, whichever lands second.
+        if wantsRingback { ringback.start() }
         watchOutgoing(callId: call.id)
         return call
     }
@@ -146,14 +172,15 @@ final class CallService: NSObject, ObservableObject {
 
                 switch call?.status {
                 case "ACTIVE":
+                    self.stopRingback()
                     if self.connectedAt == nil { self.connectedAt = Date() }
                     self.activeCall = call
                 case "DECLINED", "ENDED", "MISSED":
-                    // The server already holds the final status; clearing the
-                    // ids first stops the end action from patching over a
-                    // DECLINED with an ENDED.
-                    self.activeCall = nil
+                    // The server already holds the final status, so the end
+                    // action must not patch over a DECLINED with an ENDED.
+                    self.suppressStatusReport = true
                     self.pendingCallId = nil
+                    self.endedNotice = call?.status == "DECLINED" ? "Call declined" : "Call ended"
                     self.endCall()
                     return
                 default:
@@ -162,8 +189,9 @@ final class CallService: NSObject, ObservableObject {
                     // the ring deadline ends things here.
                     if Date() >= ringDeadline {
                         try? await CallsService.setStatus("MISSED", callId: callId)
-                        self.activeCall = nil
+                        self.suppressStatusReport = true
                         self.pendingCallId = nil
+                        self.endedNotice = "No answer"
                         self.endCall()
                         return
                     }
@@ -177,7 +205,12 @@ final class CallService: NSObject, ObservableObject {
     /// which is the one path every ending goes through -- including the
     /// system call UI and the lock screen, which never touch this method.
     func endCall() {
-        guard let uuid = currentCallUUID else { return }
+        guard let uuid = currentCallUUID else {
+            // No CallKit call to end, so no end action will fire -- the call
+            // screen would stay up forever waiting for one.
+            showEndedThenDismiss()
+            return
+        }
         let action = CXEndCallAction(call: uuid)
         callController.request(CXTransaction(action: action)) { error in
             if let error { print("End call failed: \(error.localizedDescription)") }
@@ -212,6 +245,32 @@ final class CallService: NSObject, ObservableObject {
         pendingCall = try? await CallsService.details(callId)
     }
 
+    private func stopRingback() {
+        wantsRingback = false
+        ringback.stop()
+    }
+
+    func setSpeaker(_ on: Bool) {
+        try? AVAudioSession.sharedInstance()
+            .overrideOutputAudioPort(on ? .speaker : .none)
+    }
+
+    /// Keeps the call screen up for a beat showing why it ended, then drops
+    /// it. `activeCall` is what presents the screen, so clearing it is the
+    /// dismissal.
+    private func showEndedThenDismiss() {
+        guard activeCall != nil else {
+            endedNotice = nil
+            return
+        }
+        if endedNotice == nil { endedNotice = "Call ended" }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            self?.activeCall = nil
+            self?.endedNotice = nil
+        }
+    }
+
     /// The audio session must be configured for voice chat or the call
     /// routes to the wrong output and echoes badly.
     private func configureAudioSession() {
@@ -229,7 +288,9 @@ extension CallService: CXProviderDelegate {
         Task { @MainActor in
             outgoingWatch?.cancel()
             outgoingWatch = nil
+            stopRingback()
             activeCall = nil
+            endedNotice = nil
             isCallActive = false
             connectedAt = nil
             currentCallUUID = nil
@@ -245,6 +306,7 @@ extension CallService: CXProviderDelegate {
                 await loadCall(callId)
             }
             activeCall = pendingCall
+            endedNotice = nil
             isCallActive = true
             connectedAt = Date()
             if let callId = activeCall?.id {
@@ -262,17 +324,19 @@ extension CallService: CXProviderDelegate {
             // on the server until they aged out.
             outgoingWatch?.cancel()
             outgoingWatch = nil
+            stopRingback()
             let wasAnswered = activeCall != nil
-            if let callId = activeCall?.id ?? pendingCallId {
+            if !suppressStatusReport, let callId = activeCall?.id ?? pendingCallId {
                 try? await CallsService.setStatus(wasAnswered ? "ENDED" : "DECLINED",
                                                   callId: callId)
             }
-            activeCall = nil
+            suppressStatusReport = false
             pendingCall = nil
             pendingCallId = nil
             isCallActive = false
             connectedAt = nil
             currentCallUUID = nil
+            showEndedThenDismiss()
             action.fulfill()
         }
     }
@@ -287,6 +351,11 @@ extension CallService: CXProviderDelegate {
     nonisolated func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         // WebRTC starts sending audio once the session is active.
         NotificationCenter.default.post(name: .callAudioSessionActivated, object: nil)
+        Task { @MainActor in
+            // An engine started before this point plays into a session that
+            // isn't running yet, which is silence.
+            if wantsRingback { ringback.start() }
+        }
     }
 }
 
@@ -297,6 +366,7 @@ extension CallService: PKPushRegistryDelegate {
                                   didUpdate credentials: PKPushCredentials,
                                   for type: PKPushType) {
         let token = credentials.token.map { String(format: "%02x", $0) }.joined()
+        PushLog.write("VoIP push token received: \(token)")
         // Environment and bundle id matter as much here as they do for the
         // normal APNs token, which is why both go through the same service.
         Task { try? await PushSubscriptionService.subscribeVoIP(token: token) }
@@ -313,6 +383,7 @@ extension CallService: PKPushRegistryDelegate {
         // reported call, so this always reports something -- even with a
         // malformed payload, where "Incoming call" is better than a crash.
         let info = payload.dictionaryPayload
+        PushLog.write("VoIP push received: \(info)")
         let callId = info["callId"] as? String ?? ""
         let callerName = info["callerName"] as? String ?? "Incoming call"
         let hasVideo = (info["kind"] as? String) == "VIDEO"
@@ -335,4 +406,49 @@ extension Notification.Name {
 struct CallPermissionError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
+}
+
+/// Caller-side ringback tone, synthesised rather than shipped as an asset:
+/// it is two sine waves, and generating them is smaller than a sound file in
+/// the repo. Plays through the call's audio session, so it follows the same
+/// route as the call itself.
+final class Ringback {
+    private let engine = AVAudioEngine()
+    private let node = AVAudioPlayerNode()
+
+    func start() {
+        guard !engine.isRunning else { return }
+        let rate = 8000.0
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format,
+                                            frameCapacity: AVAudioFrameCount(rate * 6))
+        else { return }
+
+        // US cadence: 440 Hz + 480 Hz for two seconds, four seconds of
+        // silence, looped by the player node.
+        buffer.frameLength = buffer.frameCapacity
+        let samples = buffer.floatChannelData![0]
+        for frame in 0..<Int(buffer.frameLength) {
+            let t = Double(frame) / rate
+            samples[frame] = t < 2
+                ? Float((sin(2 * .pi * 440 * t) + sin(2 * .pi * 480 * t)) * 0.15)
+                : 0
+        }
+
+        engine.attach(node)
+        engine.connect(node, to: engine.mainMixerNode, format: format)
+        guard (try? engine.start()) != nil else {
+            engine.detach(node)
+            return
+        }
+        node.scheduleBuffer(buffer, at: nil, options: .loops)
+        node.play()
+    }
+
+    func stop() {
+        guard engine.isRunning else { return }
+        node.stop()
+        engine.stop()
+        engine.detach(node)
+    }
 }

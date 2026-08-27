@@ -46,7 +46,7 @@
     <!-- Required by App Store validation (ITMS-90894) for any app holding
          the com.apple.developer.usernotifications.communication entitlement:
          the entitlement promises the app handles communication intents, and
-         these are the two it actually donates -- calls and messages. -->
+         these are the two it actually donates: calls and messages. -->
     <key>NSUserActivityTypes</key>
     <array>
         <string>INStartCallIntent</string>

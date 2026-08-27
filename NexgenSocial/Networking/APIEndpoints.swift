@@ -35,6 +35,7 @@ enum APIEndpoints {
         static func like(_ id: String) -> String { "/api/posts/\(id)/like" }
         static func comments(_ id: String) -> String { "/api/posts/\(id)/comments" }
         static func notes(_ id: String) -> String { "/api/posts/\(id)/notes" }
+        static func by(username: String) -> String { "/api/posts/by/\(username)" }
         static func voteNote(_ id: String) -> String { "/api/posts/notes/\(id)/vote" }
     }
 
@@ -75,6 +76,9 @@ enum APIEndpoints {
     }
 
     enum Users {
+        static let me     = "/api/users/me"
+        static let avatar = "/api/users/me/avatar"
+        static func profile(_ username: String) -> String { "/api/users/\(username)" }
         static func search(_ query: String) -> String {
             query.isEmpty ? "/api/users" : "/api/users?q=\(query.urlQueryEscaped)"
         }
@@ -199,6 +203,7 @@ enum APIEndpoints {
         static let apnsSubscribe   = "/api/push/apns-subscribe"
         static let apnsUnsubscribe = "/api/push/apns-unsubscribe"
         static let voipSubscribe   = "/api/push/voip-subscribe"
+        static let voipUnsubscribe = "/api/push/voip-unsubscribe"
     }
 }
 

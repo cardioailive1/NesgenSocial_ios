@@ -24,6 +24,7 @@ final class AuthSession: ObservableObject {
         }
         do {
             currentUser = try await AuthService.me()
+            await PushService.shared.registerIfAuthorized()
         } catch {
             await APIClient.shared.setToken(nil)
             currentUser = nil
@@ -62,6 +63,22 @@ final class AuthSession: ObservableObject {
         await PushService.shared.unregister()
         await APIClient.shared.setToken(nil)
         currentUser = nil
+    }
+
+    /// Deletes the account server-side, then tears down the local session the
+    /// same way a sign-out does. The local state is only cleared once the
+    /// server confirms, so a failed delete leaves the person signed in with
+    /// an error rather than locked out of an account that still exists.
+    func deleteAccount() async -> Bool {
+        errorMessage = nil
+        do {
+            try await ProfileService.deleteAccount()
+            await signOut()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     /// Sign-in and sign-up differ only in the request they make; everything

@@ -1,10 +1,19 @@
 import SwiftUI
+import PhotosUI
 import UIKit
 
+/// The signed-in person's own profile, laid out the way people expect from
+/// every other social app: identity and counts up top, then their posts.
+/// Settings moved behind the toolbar button so the first screen is about the
+/// person, not about preferences.
 struct ProfileView: View {
     @EnvironmentObject var session: AuthSession
-    @State private var showSignOutConfirm = false
-    @State private var pushEnabled = false
+    @StateObject private var model = ProfileViewModel()
+
+    @State private var showSettings = false
+    @State private var avatarItem: PhotosPickerItem?
+
+    private var user: User? { session.currentUser }
 
     var body: some View {
         NavigationStack {
@@ -12,91 +21,130 @@ struct ProfileView: View {
                 Theme.navy950.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 16) {
-                        VStack(spacing: 10) {
-                            AvatarView(url: session.currentUser?.avatarUrl,
-                                       seed: session.currentUser?.username ?? "?", size: 84)
-                            Text(session.currentUser?.displayName ?? "")
-                                .font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
-                            Text("@\(session.currentUser?.username ?? "")")
-                                .font(.system(size: 13)).foregroundStyle(Theme.slate400)
-                            if let bio = session.currentUser?.bio, !bio.isEmpty {
-                                Text(bio)
-                                    .font(.system(size: 13)).foregroundStyle(Theme.slate300)
-                                    .multilineTextAlignment(.center)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(20)
-                        .card()
-
-                        VStack(spacing: 0) {
-                            Toggle(isOn: $pushEnabled) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Call & message notifications")
-                                        .font(.system(size: 14)).foregroundStyle(.white)
-                                    Text("Ring even when the app is closed")
-                                        .font(.system(size: 11)).foregroundStyle(Theme.slate400)
-                                }
-                            }
-                            .tint(Theme.cyan400)
-                            .padding(14)
-                            .onChange(of: pushEnabled) { _, enabled in
-                                if enabled { Task { pushEnabled = await PushService.shared.requestPermission() } }
-                            }
-
-                            Divider().background(Theme.line)
-
-                            SettingsRow(icon: "square.and.arrow.up", title: "Export my data") {
-                                // Opens in Safari: the export is a file
-                                // download, which the browser handles better
-                                // than an in-app view.
-                                if let url = URL(string: APIClient.baseURL + "/api/users/me/export") {
-                                    UIApplication.shared.open(url)
-                                }
-                            }
-                            Divider().background(Theme.line)
-                            SettingsRow(icon: "doc.text", title: "Privacy Policy") {
-                                UIApplication.shared.open(URL(string: AppConfig.privacyURL)!)
-                            }
-                            Divider().background(Theme.line)
-                            SettingsRow(icon: "doc.plaintext", title: "Terms of Use") {
-                                UIApplication.shared.open(URL(string: AppConfig.termsURL)!)
-                            }
-                        }
-                        .card()
-
-                        Button("Sign out") { showSignOutConfirm = true }
-                            .buttonStyle(GhostButtonStyle())
-                            .padding(.top, 4)
+                    LazyVStack(spacing: 14) {
+                        header
+                        content
                     }
-                    .padding(14)
+                    .padding(.bottom, 24)
+                }
+                .refreshable { await model.load(username: user?.username ?? "") }
+            }
+            .navigationTitle(user?.username ?? "Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showSettings = true } label: {
+                        Image(systemName: "line.3.horizontal").foregroundStyle(.white)
+                    }
                 }
             }
-            .navigationTitle("Profile")
-            .confirmationDialog("Sign out?", isPresented: $showSignOutConfirm) {
-                Button("Sign out", role: .destructive) { Task { await session.signOut() } }
-                Button("Cancel", role: .cancel) {}
+            .sheet(isPresented: $showSettings) { ProfileSettingsView().environmentObject(session) }
+            .task { await model.load(username: user?.username ?? "") }
+            .onChange(of: avatarItem) { _, item in
+                guard let item else { return }
+                Task { await uploadAvatar(item) }
             }
-            .task { pushEnabled = PushService.shared.permissionGranted }
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 20) {
+                PhotosPicker(selection: $avatarItem, matching: .images) {
+                    ZStack(alignment: .bottomTrailing) {
+                        AvatarView(url: user?.avatarUrl, seed: user?.username ?? "?", size: 88)
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.navy950)
+                            .padding(6)
+                            .background(Theme.cyan400, in: Circle())
+                            .overlay(Circle().stroke(Theme.navy950, lineWidth: 2))
+                    }
+                }
+
+                HStack(spacing: 0) {
+                    StatItem(value: model.postCount, label: "posts")
+                    StatItem(value: model.stats?.followerCount ?? 0, label: "followers")
+                    StatItem(value: model.stats?.followingCount ?? 0, label: "following")
+                    StatItem(value: model.stats?.friendCount ?? 0, label: "friends")
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(user?.displayName ?? "")
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                if let bio = user?.bio, !bio.isEmpty {
+                    Text(bio).font(.system(size: 13.5)).foregroundStyle(Theme.slate300)
+                }
+                if let occupation = user?.occupation, !occupation.isEmpty {
+                    Text(occupation).font(.system(size: 13)).foregroundStyle(Theme.slate400)
+                }
+            }
+
+            NavigationLink { ProfileSetupView() } label: {
+                Text("Edit profile")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(Theme.navy800, in: RoundedRectangle(cornerRadius: 9))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+    }
+
+    // MARK: - Posts
+
+    @ViewBuilder
+    private var content: some View {
+        if model.isLoading && model.posts.isEmpty {
+            ProgressView().tint(Theme.cyan400).padding(.top, 40)
+        } else if model.posts.isEmpty {
+            VStack(spacing: 6) {
+                Image(systemName: "camera").font(.system(size: 30)).foregroundStyle(Theme.slate400)
+                Text("No posts yet").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Text(model.errorMessage ?? "Posts you share will show up here.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.slate400)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 40)
+            .padding(.horizontal, 30)
+        } else {
+            LazyVStack(spacing: 12) {
+                ForEach(model.posts) { post in
+                    NavigationLink { PostDetailView(post: post) } label: {
+                        PostCard(post: post, onLike: {})
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 14)
+                }
+            }
+        }
+    }
+
+    private func uploadAvatar(_ item: PhotosPickerItem) async {
+        defer { avatarItem = nil }
+        guard let picked = await AttachmentLoader.load([item]).first else { return }
+        if let updated = try? await ProfileService.uploadAvatar(picked) {
+            session.currentUser = updated
         }
     }
 }
 
-struct SettingsRow: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
+// MARK: - Pieces
+
+private struct StatItem: View {
+    let value: Int
+    let label: String
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon).foregroundStyle(Theme.cyan400).frame(width: 22)
-                Text(title).font(.system(size: 14)).foregroundStyle(.white)
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(Theme.slate400)
-            }
-            .padding(14)
+        VStack(spacing: 2) {
+            Text("\(value)").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+            Text(label).font(.system(size: 12)).foregroundStyle(Theme.slate400)
         }
+        .frame(maxWidth: .infinity)
     }
 }

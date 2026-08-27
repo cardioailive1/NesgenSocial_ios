@@ -28,7 +28,10 @@ struct RootView: View {
             CallView(call: call)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { ScreenTimeTracker.shared.begin() }
+            if phase == .active {
+                ScreenTimeTracker.shared.begin()
+                PushService.shared.clearBadge()
+            }
             else { ScreenTimeTracker.shared.end() }
         }
     }
@@ -62,11 +65,20 @@ struct MainTabView: View {
         .tint(Theme.cyan400)
         .task { await MediaPermissions.requestAll() }
         .task { await CallService.shared.pollForIncomingCalls() }
+        .task {
+            // Drains a notification tapped while the app was not running.
+            if let link = PushService.shared.pendingDeepLink {
+                PushService.shared.pendingDeepLink = nil
+                if let destination = DeepLink.parse(link) { selectedTab = destination.tab }
+                NotificationCenter.default.post(name: .openDeepLink, object: link)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openDeepLink)) { note in
             // Picks the tab. Going deeper than that is up to the tab: each
             // owns its own navigation stack, and `MessagesView` listens for
             // the same notification to open the conversation named in the
             // link. An unrecognised link leaves the user where they are.
+            PushService.shared.pendingDeepLink = nil // handled live; don't replay it later
             guard let link = note.object as? String,
                   let destination = DeepLink.parse(link) else { return }
             selectedTab = destination.tab
