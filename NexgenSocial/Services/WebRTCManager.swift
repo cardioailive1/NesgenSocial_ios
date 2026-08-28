@@ -68,10 +68,28 @@ final class WebRTCManager: NSObject, ObservableObject {
         audioSession.useManualAudio = true
         audioSession.isAudioEnabled = false
 
+        // `useManualAudio` means RTCAudioSession tracks activation itself.
+        // Without being told CallKit activated the session its `isActive`
+        // stays false, the audio unit never starts, and the call is silent
+        // in both directions.
         NotificationCenter.default.addObserver(
             forName: .callAudioSessionActivated, object: nil, queue: .main
-        ) { _ in
-            RTCAudioSession.sharedInstance().isAudioEnabled = true
+        ) { note in
+            let rtc = RTCAudioSession.sharedInstance()
+            if let session = note.object as? AVAudioSession {
+                rtc.audioSessionDidActivate(session)
+            }
+            rtc.isAudioEnabled = true
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .callAudioSessionDeactivated, object: nil, queue: .main
+        ) { note in
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.isAudioEnabled = false
+            if let session = note.object as? AVAudioSession {
+                rtc.audioSessionDidDeactivate(session)
+            }
         }
     }
 

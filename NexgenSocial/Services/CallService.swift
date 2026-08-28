@@ -281,10 +281,12 @@ final class CallService: NSObject, ObservableObject {
     /// The audio session must be configured for voice chat or the call
     /// routes to the wrong output and echoes badly.
     private func configureAudioSession() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .voiceChat,
-                                 options: [.allowBluetoothHFP, .defaultToSpeaker])
-        try? session.setActive(true)
+        // Category only -- CallKit activates the session and posts
+        // `didActivate`. Activating it here races CallKit and leaves
+        // RTCAudioSession's own activation state wrong, which is silence.
+        try? AVAudioSession.sharedInstance()
+            .setCategory(.playAndRecord, mode: .voiceChat,
+                         options: [.allowBluetoothHFP, .defaultToSpeaker])
     }
 }
 
@@ -356,13 +358,21 @@ extension CallService: CXProviderDelegate {
     }
 
     nonisolated func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        // WebRTC starts sending audio once the session is active.
-        NotificationCenter.default.post(name: .callAudioSessionActivated, object: nil)
+        // WebRTC starts sending audio once the session is active. The session
+        // itself is passed along: RTCAudioSession needs the instance CallKit
+        // activated, not just a flag.
+        NotificationCenter.default.post(name: .callAudioSessionActivated,
+                                        object: audioSession)
         Task { @MainActor in
             // An engine started before this point plays into a session that
             // isn't running yet, which is silence.
             if wantsRingback { ringback.start() }
         }
+    }
+
+    nonisolated func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        NotificationCenter.default.post(name: .callAudioSessionDeactivated,
+                                        object: audioSession)
     }
 }
 
@@ -407,6 +417,7 @@ extension CallService: PKPushRegistryDelegate {
 
 extension Notification.Name {
     static let callAudioSessionActivated = Notification.Name("callAudioSessionActivated")
+    static let callAudioSessionDeactivated = Notification.Name("callAudioSessionDeactivated")
 }
 
 struct CallPermissionError: LocalizedError {
