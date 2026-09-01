@@ -47,6 +47,20 @@ struct VideoSurface: View {
     }
 }
 
+/// True while the tab this view lives in is the selected one. `TabView` keeps
+/// every tab mounted, so a card in an unselected tab keeps whatever geometry
+/// it had -- and a video in it kept playing, audible, from another tab.
+private struct TabIsActiveKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var isTabActive: Bool {
+        get { self[TabIsActiveKey.self] }
+        set { self[TabIsActiveKey.self] = newValue }
+    }
+}
+
 /// Runs its content with a flag saying whether the view is substantially on
 /// screen, so only what a person is actually looking at does expensive work.
 ///
@@ -56,9 +70,17 @@ struct PlaysWhenVisible<Content: View>: View {
     @ViewBuilder let content: (Bool) -> Content
 
     @State private var isVisible = false
+    @Environment(\.isTabActive) private var isTabActive
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Geometry alone is not enough: an unselected tab and a backgrounded app
+    /// both leave the frame exactly where it was.
+    private var shouldPlay: Bool {
+        isVisible && isTabActive && scenePhase == .active
+    }
 
     var body: some View {
-        content(isVisible)
+        content(shouldPlay)
             .background(
                 GeometryReader { geometry in
                     Color.clear.preference(key: VisibleFractionKey.self,

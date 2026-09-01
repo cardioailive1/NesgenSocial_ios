@@ -5,6 +5,16 @@ struct RootView: View {
     @EnvironmentObject var callService: CallService
     @Environment(\.scenePhase) private var scenePhase
 
+    /// The call screen is presented by the call itself, minus the minimised
+    /// case. Dismissing minimises rather than clearing `activeCall`, which
+    /// would take the call down with it.
+    private var presentedCall: Binding<Call?> {
+        Binding(
+            get: { callService.isMinimized ? nil : callService.activeCall },
+            set: { if $0 == nil { callService.isMinimized = true } }
+        )
+    }
+
     var body: some View {
         ZStack {
             Theme.navy950.ignoresSafeArea()
@@ -24,8 +34,24 @@ struct RootView: View {
         // flag: answering sets the flag immediately but loads the call over
         // the network, so a flag-driven cover could present an empty screen
         // in the gap before `activeCall` arrives.
-        .fullScreenCover(item: $callService.activeCall) { call in
+        .fullScreenCover(item: presentedCall) { call in
             CallView(call: call)
+        }
+        // Pushes the rest of the app down rather than floating over it, so
+        // nothing is ever hidden behind the bar. A video call gets the
+        // floating tile below instead -- a bar with no picture is a poor way
+        // to minimise a call you are being seen on.
+        .safeAreaInset(edge: .top) {
+            if callService.isMinimized, let call = callService.activeCall,
+               call.kind != "VIDEO" {
+                OngoingCallBar()
+            }
+        }
+        .overlay {
+            if callService.isMinimized, let call = callService.activeCall,
+               call.kind == "VIDEO" {
+                FloatingCallTile()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -43,22 +69,27 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             FeedView()
+                .environment(\.isTabActive, selectedTab == 0)
                 .tabItem { Label("Feed", systemImage: "house.fill") }
                 .tag(0)
 
             ReelsView()
+                .environment(\.isTabActive, selectedTab == 1)
                 .tabItem { Label("Reels", systemImage: "play.rectangle.fill") }
                 .tag(1)
 
             DiscoverView()
+                .environment(\.isTabActive, selectedTab == 2)
                 .tabItem { Label("Discover", systemImage: "safari.fill") }
                 .tag(2)
 
             MessagesView()
+                .environment(\.isTabActive, selectedTab == 3)
                 .tabItem { Label("Messages", systemImage: "bubble.left.fill") }
                 .tag(3)
 
             ProfileView()
+                .environment(\.isTabActive, selectedTab == 4)
                 .tabItem { Label("Profile", systemImage: "person.fill") }
                 .tag(4)
         }
@@ -83,5 +114,121 @@ struct MainTabView: View {
                   let destination = DeepLink.parse(link) else { return }
             selectedTab = destination.tab
         }
+    }
+}
+
+
+/// The "tap to go back to your call" bar, shown while the call screen is
+/// minimised. Deliberately the only way back: minimising is not hanging up,
+/// and a call with no visible way to return to it reads as a bug.
+struct OngoingCallBar: View {
+    @EnvironmentObject var callService: CallService
+
+    var body: some View {
+        Button {
+            callService.isMinimized = false
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text("Tap to return to call")
+                    .font(.system(size: 14, weight: .semibold))
+
+                Spacer()
+
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(elapsed(at: context.date))
+                        .font(.system(size: 13, design: .monospaced))
+                }
+            }
+            .foregroundStyle(Theme.navy950)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
+            .background(Theme.cyan400)
+        }
+    }
+
+    private func elapsed(at now: Date) -> String {
+        guard let start = callService.connectedAt else { return "Ringing…" }
+        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+
+/// Picture-in-picture for a minimised video call: the other side stays on
+/// screen, draggable, while the rest of the app is used underneath. Tapping
+/// it goes back to the full call screen.
+///
+/// This is in-app only. Keeping the video alive after the app is backgrounded
+/// is `AVPictureInPictureController`, which needs WebRTC frames bridged into
+/// an `AVSampleBufferDisplayLayer` -- a different and much larger piece of
+/// work than this.
+struct FloatingCallTile: View {
+    @EnvironmentObject var callService: CallService
+    @ObservedObject private var webRTC = WebRTCManager.shared
+
+    @State private var center: CGPoint?
+
+    private let size = CGSize(width: 108, height: 160)
+    private let margin: CGFloat = 12
+
+    var body: some View {
+        GeometryReader { geo in
+            tile
+                .frame(width: size.width, height: size.height)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Theme.line, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                .position(center ?? defaultCenter(in: geo.size))
+                .gesture(
+                    // ponytail: the tile jumps to the finger on grab rather
+                    // than tracking the offset from where it was touched.
+                    // Track the grab point too if it reads badly in the hand.
+                    DragGesture()
+                        .onChanged { center = $0.location }
+                        .onEnded { center = clamped($0.location, in: geo.size) }
+                )
+                .onTapGesture { callService.isMinimized = false }
+                .onChange(of: geo.size) { _, new in
+                    // Rotation would otherwise leave it off screen.
+                    if let point = center { center = clamped(point, in: new) }
+                }
+        }
+        .ignoresSafeArea(.keyboard)
+    }
+
+    @ViewBuilder
+    private var tile: some View {
+        if let remote = webRTC.remoteVideoTrack {
+            VideoTrackView(track: remote)
+        } else {
+            // Video calls show the avatar until the far end's track arrives,
+            // exactly as the full call screen does.
+            Theme.navy800.overlay(
+                Image(systemName: "video.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(Theme.slate400)
+            )
+        }
+    }
+
+    private func defaultCenter(in bounds: CGSize) -> CGPoint {
+        CGPoint(x: bounds.width - size.width / 2 - margin,
+                y: size.height / 2 + margin + 44)
+    }
+
+    private func clamped(_ point: CGPoint, in bounds: CGSize) -> CGPoint {
+        let halfWidth = size.width / 2 + margin
+        let halfHeight = size.height / 2 + margin
+        return CGPoint(
+            x: min(max(point.x, halfWidth), bounds.width - halfWidth),
+            y: min(max(point.y, halfHeight), bounds.height - halfHeight)
+        )
     }
 }

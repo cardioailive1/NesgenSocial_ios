@@ -27,11 +27,30 @@ final class WebRTCManager: NSObject, ObservableObject {
     @Published private(set) var remoteVideoTrack: RTCVideoTrack?
     @Published private(set) var localVideoTrack: RTCVideoTrack?
     @Published private(set) var isConnected = false
+    /// Media is down but a retry is in flight. A blip on the network -- a
+    /// wifi-to-cellular hop, a lift -- used to drop the call outright; the
+    /// call is held for `reconnectWindow` behind a "Reconnecting" banner
+    /// instead.
+    @Published private(set) var isReconnecting = false
+    /// Mic and camera state live here rather than in the call screen: that
+    /// screen is destroyed and rebuilt every time the call is minimised and
+    /// restored, and its local flags came back false while the producers
+    /// were still paused -- the buttons then lied and toggled backwards.
+    @Published private(set) var isMuted = false
+    @Published private(set) var isCameraEnabled = true
+    @Published private(set) var isUsingFrontCamera = true
     /// Why media never came up, for the call screen to show. A silent
     /// failure here is indistinguishable from a call nobody answers.
     @Published private(set) var lastError: String?
 
     private var webSocket: URLSessionWebSocketTask?
+    /// What to re-join with when the connection drops.
+    private var lastJoin: (roomId: String, role: String, video: Bool, publish: Bool)?
+    private var reconnect: Task<Void, Never>?
+    private let reconnectWindow: TimeInterval = 15
+    /// Keeps the signalling socket from being reaped mid-call. See
+    /// `startKeepAlive`.
+    private var keepAlive: Task<Void, Never>?
 
     private var device: Device?
     private var sendTransport: SendTransport?
@@ -84,7 +103,13 @@ final class WebRTCManager: NSObject, ObservableObject {
 
         NotificationCenter.default.addObserver(
             forName: .callAudioSessionDeactivated, object: nil, queue: .main
-        ) { note in
+        ) { [weak self] note in
+            // A deactivation belonging to a call that has already ended can
+            // land after the next call has activated the session -- back to
+            // back calls do this. Acting on it then turns the live call's
+            // audio off, in both directions.
+            let live = MainActor.assumeIsolated { self?.isConnected ?? false }
+            guard !live else { return }
             let rtc = RTCAudioSession.sharedInstance()
             rtc.isAudioEnabled = false
             if let session = note.object as? AVAudioSession {
@@ -132,6 +157,7 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     private func join(roomId: String, role: String, video: Bool, publish: Bool) async {
         guard webSocket == nil else { return }
+        lastJoin = (roomId, role, video, publish)
         lastError = nil
 
         // Checked before anything is opened: a publisher without access
@@ -154,6 +180,7 @@ final class WebRTCManager: NSObject, ObservableObject {
         webSocket = task
         task.resume()
         listen()
+        startKeepAlive()
 
         do {
             let token = await APIClient.shared.currentToken() ?? ""
@@ -196,8 +223,32 @@ final class WebRTCManager: NSObject, ObservableObject {
             }
         } catch {
             print("WebRTC join failed: \(error)")
-            disconnect()
+            teardown()
             lastError = error.localizedDescription
+            handleConnectionLoss()
+        }
+    }
+
+    /// Pings the signalling socket periodically.
+    ///
+    /// Nothing crosses this socket between call setup and hang-up, so any
+    /// idle timeout in front of the server -- a proxy, a load balancer --
+    /// closes it a few minutes in. The server closes that peer's mediasoup
+    /// transports when the socket goes, so the call goes silent in both
+    /// directions while the call screen still shows a running timer. That is
+    /// the "audio just stops after a few minutes" case.
+    private func startKeepAlive() {
+        keepAlive?.cancel()
+        keepAlive = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled, let socket = self?.webSocket else { return }
+                socket.sendPing { error in
+                    if let error {
+                        print("Signalling ping failed: \(error.localizedDescription)")
+                    }
+                }
+            }
         }
     }
 
@@ -252,7 +303,17 @@ final class WebRTCManager: NSObject, ObservableObject {
     /// CallKit, so nothing ever flipped `isAudioEnabled` back on for them
     /// and they ran completely silent in both directions.
     private func configureAudioSession(roomId: String, publish: Bool) {
-        guard !roomId.hasPrefix("call-") else { return }
+        guard !roomId.hasPrefix("call-") else {
+            // CallKit already activated the session. If it did so before this
+            // singleton existed the activation notification went nowhere, so
+            // the latched session is picked up here instead. Both calls are
+            // idempotent, so doing it twice is harmless.
+            if let session = CallAudioSession.active {
+                RTCAudioSession.sharedInstance().audioSessionDidActivate(session)
+                RTCAudioSession.sharedInstance().isAudioEnabled = true
+            }
+            return
+        }
 
         let session = AVAudioSession.sharedInstance()
         if publish {
@@ -280,7 +341,10 @@ final class WebRTCManager: NSObject, ObservableObject {
             )
         }
 
-        guard video else { return }
+        guard video else {
+            setMuted(isMuted)
+            return
+        }
 
         let videoSource = Self.factory.videoSource()
         let capturer = RTCCameraVideoCapturer(delegate: videoSource)
@@ -294,11 +358,17 @@ final class WebRTCManager: NSObject, ObservableObject {
                 for: videoTrack, encodings: nil, codecOptions: nil, codec: nil, appData: nil
             )
         }
+        // A reconnect builds fresh producers, which start live regardless of
+        // what the user had chosen. Without this a muted call comes back
+        // unmuted, and a camera turned off comes back on.
+        setMuted(isMuted)
+        setCameraEnabled(isCameraEnabled)
     }
 
     private func startCapture(_ capturer: RTCCameraVideoCapturer) {
+        let wanted: AVCaptureDevice.Position = isUsingFrontCamera ? .front : .back
         guard let camera = RTCCameraVideoCapturer.captureDevices()
-            .first(where: { $0.position == .front })
+            .first(where: { $0.position == wanted })
             ?? RTCCameraVideoCapturer.captureDevices().first else { return }
 
         let formats = RTCCameraVideoCapturer.supportedFormats(for: camera)
@@ -359,17 +429,74 @@ final class WebRTCManager: NSObject, ObservableObject {
     // MARK: - Controls
 
     func setMuted(_ muted: Bool) {
+        isMuted = muted
         guard let audioProducer else { return }
         muted ? audioProducer.pause() : audioProducer.resume()
     }
 
     func setCameraEnabled(_ enabled: Bool) {
+        isCameraEnabled = enabled
         guard let videoProducer else { return }
         enabled ? videoProducer.resume() : videoProducer.pause()
         localVideoTrack?.isEnabled = enabled
     }
 
+    /// Front/back camera. The same capturer is restarted on the other
+    /// device, so the track -- and with it the producer the far end is
+    /// already consuming -- stays exactly where it is.
+    func switchCamera() {
+        guard let capturer = videoCapturer else { return }
+        isUsingFrontCamera.toggle()
+        capturer.stopCapture { [weak self] in
+            Task { @MainActor in self?.startCapture(capturer) }
+        }
+    }
+
     func disconnect() {
+        reconnect?.cancel()
+        reconnect = nil
+        isReconnecting = false
+        lastJoin = nil
+        isMuted = false
+        isCameraEnabled = true
+        isUsingFrontCamera = true
+        teardown()
+    }
+
+    /// Re-joins the same room for up to `reconnectWindow` seconds, and only
+    /// ends the call if the window runs out. Everything the old connection
+    /// held is dead by now, so each attempt starts from a clean teardown.
+    private func handleConnectionLoss() {
+        guard reconnect == nil, let params = lastJoin else { return }
+        isReconnecting = true
+        reconnect = Task { @MainActor [weak self] in
+            let deadline = Date().addingTimeInterval(self?.reconnectWindow ?? 15)
+            while !Task.isCancelled, Date() < deadline {
+                self?.teardown()
+                await self?.join(roomId: params.roomId, role: params.role,
+                                 video: params.video, publish: params.publish)
+                guard let self, !Task.isCancelled else { return }
+                if isConnected {
+                    isReconnecting = false
+                    lastError = nil
+                    reconnect = nil
+                    return
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+            guard let self, !Task.isCancelled else { return }
+            reconnect = nil
+            isReconnecting = false
+            disconnect()
+            lastError = "The call connection was lost."
+            CallService.shared.endCall()
+        }
+    }
+
+    private func teardown() {
+        keepAlive?.cancel()
+        keepAlive = nil
+
         videoCapturer?.stopCapture()
         videoCapturer = nil
 
@@ -459,6 +586,10 @@ final class WebRTCManager: NSObject, ObservableObject {
                     self.isConnected = false
                     // Otherwise every in-flight request hangs forever.
                     self.failAllPending(error)
+                    // Losing this socket kills the media with it, but the
+                    // cause is usually transient -- retry before giving the
+                    // call up.
+                    self.handleConnectionLoss()
                 }
             }
         }
@@ -491,6 +622,12 @@ final class WebRTCManager: NSObject, ObservableObject {
             }
         case "peerClosed":
             remoteVideoTrack = nil
+            // In a call there is only one other peer, so its media going
+            // away is the call ending. A meeting or a stream loses one of
+            // many peers and carries on.
+            if lastJoin?.roomId.hasPrefix("call-") == true {
+                CallService.shared.remoteHungUp()
+            }
         default:
             break
         }

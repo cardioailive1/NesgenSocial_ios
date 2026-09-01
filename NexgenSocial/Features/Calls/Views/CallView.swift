@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AVKit
 import WebRTC
 
 /// In-call UI. Media transport runs through WebRTC against the same
@@ -11,11 +12,6 @@ struct CallView: View {
     @EnvironmentObject var session: AuthSession
     @ObservedObject private var webRTC = WebRTCManager.shared
 
-    @State private var isMuted = false
-    @State private var isCameraOff = false
-    // Matches `configureAudioSession`, which activates the session with
-    // `.defaultToSpeaker`.
-    @State private var isSpeakerOn = true
     @State private var permissionProblem: String?
 
     private var other: User? {
@@ -68,34 +64,44 @@ struct CallView: View {
 
                 // A media failure otherwise looks exactly like a call the
                 // other side simply hasn't picked up.
-                if let problem = permissionProblem ?? webRTC.lastError {
+                // A retry in flight isn't a failure yet -- the call is held,
+                // so say so rather than showing the error that started it.
+                if webRTC.isReconnecting {
+                    HStack(spacing: 8) {
+                        ProgressView().tint(Theme.slate400)
+                        Text("Reconnecting…")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.slate400)
+                    }
+                } else if let problem = permissionProblem ?? webRTC.lastError {
                     MediaErrorNotice(message: problem)
                 }
 
                 Spacer()
 
-                HStack(spacing: 20) {
-                    CallButton(icon: isMuted ? "mic.slash.fill" : "mic.fill",
-                               label: isMuted ? "Unmute" : "Mute",
+                // Five 62pt buttons on a video call overflow a 375pt screen
+                // at the voice call's spacing.
+                HStack(spacing: call.kind == "VIDEO" ? 10 : 20) {
+                    CallButton(icon: webRTC.isMuted ? "mic.slash.fill" : "mic.fill",
+                               label: webRTC.isMuted ? "Unmute" : "Mute",
                                background: Theme.navy800) {
-                        isMuted.toggle()
-                        WebRTCManager.shared.setMuted(isMuted)
+                        webRTC.setMuted(!webRTC.isMuted)
                     }
 
-                    CallButton(icon: isSpeakerOn ? "speaker.wave.2.fill" : "speaker.fill",
-                               label: isSpeakerOn ? "Speaker" : "Earpiece",
-                               background: Theme.navy800) {
-                        isSpeakerOn.toggle()
-                        callService.setSpeaker(isSpeakerOn)
-                    }
+                    AudioOutputButton()
 
                     if call.kind == "VIDEO" {
-                        CallButton(icon: isCameraOff ? "video.slash.fill" : "video.fill",
-                                   label: isCameraOff ? "Camera on" : "Camera off",
+                        CallButton(icon: webRTC.isCameraEnabled ? "video.fill" : "video.slash.fill",
+                                   label: webRTC.isCameraEnabled ? "Camera off" : "Camera on",
                                    background: Theme.navy800) {
-                            isCameraOff.toggle()
-                            WebRTCManager.shared.setCameraEnabled(!isCameraOff)
+                            webRTC.setCameraEnabled(!webRTC.isCameraEnabled)
                         }
+
+                        CallButton(icon: "arrow.triangle.2.circlepath.camera.fill",
+                                   label: "Flip", background: Theme.navy800) {
+                            webRTC.switchCamera()
+                        }
+                        .disabled(!webRTC.isCameraEnabled)
                     }
 
                     CallButton(icon: "phone.down.fill", label: "End",
@@ -105,15 +111,37 @@ struct CallView: View {
                         callService.endCall()
                     }
                 }
+                .padding(.horizontal, 12)
                 .padding(.bottom, 50)
                 .disabled(callService.endedNotice != nil)
             }
 
-            if let local = webRTC.localVideoTrack, !isCameraOff {
+            VStack {
+                HStack {
+                    Button {
+                        callService.isMinimized = true
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(Theme.navy800.opacity(0.8), in: Circle())
+                    }
+                    .padding(.leading, 16)
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(.top, 16)
+
+            if let local = webRTC.localVideoTrack, webRTC.isCameraEnabled {
                 VStack {
                     HStack {
                         Spacer()
-                        VideoTrackView(track: local)
+                        // Mirrored, like every other self-view: the front
+                        // camera's raw frames are laterally flipped from what
+                        // the user sees in a mirror.
+                        VideoTrackView(track: local, mirrored: webRTC.isUsingFrontCamera)
                             .frame(width: 104, height: 156)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .overlay(
@@ -136,7 +164,9 @@ struct CallView: View {
             guard permissionProblem == nil else { return }
             await WebRTCManager.shared.connect(callId: call.id, video: video)
         }
-        .onDisappear { WebRTCManager.shared.disconnect() }
+        // No `onDisappear` teardown: minimising dismisses this view while
+        // the call is still up. `CallService` drops the media when the call
+        // actually ends, which is the one path every ending goes through.
     }
 
     private func timeString(at now: Date) -> String {
@@ -151,22 +181,83 @@ struct CallView: View {
 /// modern devices.
 struct VideoTrackView: UIViewRepresentable {
     let track: RTCVideoTrack
+    var mirrored = false
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> RTCMTLVideoView {
         let view = RTCMTLVideoView()
         view.videoContentMode = .scaleAspectFill
         track.add(view)
+        context.coordinator.track = track
+        context.coordinator.view = view
         return view
     }
 
-    func updateUIView(_ view: RTCMTLVideoView, context: Context) {}
-
-    static func dismantleUIView(_ view: RTCMTLVideoView, coordinator: ()) {
-        // Without this the track keeps a strong reference to a view that is
-        // no longer on screen, and the renderer runs for the rest of the
-        // call.
-        view.removeFromSuperview()
+    func updateUIView(_ view: RTCMTLVideoView, context: Context) {
+        // The track changes when a reconnect brings a new one, and the old
+        // one would otherwise keep rendering into this view.
+        if context.coordinator.track !== track {
+            context.coordinator.track?.remove(view)
+            track.add(view)
+            context.coordinator.track = track
+        }
+        view.transform = mirrored ? CGAffineTransform(scaleX: -1, y: 1) : .identity
     }
+
+    /// Detaching the renderer is what actually stops it. `removeFromSuperview`
+    /// alone left the track holding the view, so it kept decoding frames into
+    /// something off screen for the rest of the call.
+    final class Coordinator {
+        weak var track: RTCVideoTrack?
+        weak var view: RTCMTLVideoView?
+
+        deinit {
+            guard let view else { return }
+            track?.remove(view)
+        }
+    }
+}
+
+/// The audio output control.
+///
+/// Two behaviours behind one button, because which one is useful depends on
+/// what is plugged in: with nothing but the phone itself there are only two
+/// routes and a toggle is the fastest way between them, while with AirPods
+/// or a headset connected a toggle cannot express the choice at all and the
+/// system picker can.
+struct AudioOutputButton: View {
+    @EnvironmentObject var callService: CallService
+
+    var body: some View {
+        let route = callService.audioRoute
+
+        if callService.hasExternalAudioRoute {
+            CallButton(icon: route.icon, label: route.label, background: Theme.navy800) {}
+                // The system route picker has no presentation API -- the view
+                // *is* the button. Its own glyph is tinted away so ours shows
+                // through underneath.
+                // ponytail: swap for a custom sheet only if Apple ever ships
+                // a way to present this directly.
+                .overlay(RoutePicker().frame(width: 62, height: 62))
+        } else {
+            CallButton(icon: route.icon, label: route.label, background: Theme.navy800) {
+                callService.setSpeaker(!route.isSpeaker)
+            }
+        }
+    }
+}
+
+private struct RoutePicker: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.prioritizesVideoDevices = false
+        view.tintColor = .clear
+        view.activeTintColor = .clear
+        return view
+    }
+
+    func updateUIView(_ view: AVRoutePickerView, context: Context) {}
 }
 
 struct CallButton: View {

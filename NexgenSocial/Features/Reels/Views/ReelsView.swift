@@ -10,6 +10,9 @@ struct ReelsView: View {
     /// never get an `onDisappear` and would keep playing audio off-screen.
     @State private var onScreen = false
     @Environment(\.scenePhase) private var scenePhase
+    /// The tab's own selection, which is the signal `onAppear`/`onDisappear`
+    /// don't reliably give inside a `TabView`.
+    @Environment(\.isTabActive) private var isTabActive
 
     var body: some View {
         GeometryReader { geo in
@@ -43,7 +46,8 @@ struct ReelsView: View {
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 0) {
                             ForEach(model.reels) { reel in
-                                ReelCell(reel: reel, isActive: onScreen && scenePhase == .active && currentID == reel.id) {
+                                ReelCell(reel: reel, isActive: onScreen && isTabActive && scenePhase == .active
+                                                    && currentID == reel.id) {
                                     await model.toggleLike(reel)
                                 } onWatched: { seconds, completed in
                                     await model.reportView(reel, watchedSec: seconds, completed: completed)
