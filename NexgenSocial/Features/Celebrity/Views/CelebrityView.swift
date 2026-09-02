@@ -6,6 +6,7 @@ import PhotosUI
 /// and the screen says as much rather than implying a feed it doesn't have.
 struct CelebrityView: View {
     @StateObject private var model = CelebrityViewModel()
+    @State private var selectedPost: Post?
     @State private var selectedItems: [PhotosPickerItem] = []
 
     var body: some View {
@@ -21,19 +22,12 @@ struct CelebrityView: View {
 
                     composer
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     ForEach(model.posts) { post in
-                        NavigationLink {
-                            PostDetailView(post: post)
-                        } label: {
-                            PostCard(post: post) { await model.toggleLike(post) }
+                        PostCard(post: post, onOpen: { selectedPost = post }) {
+                            await model.toggleLike(post)
                         }
-                        .buttonStyle(.plain)
                     }
 
                     if model.posts.isEmpty {
@@ -47,8 +41,9 @@ struct CelebrityView: View {
                 }
                 .padding(14)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
+        .navigationDestination(item: $selectedPost) { PostDetailView(post: $0) }
         .navigationTitle("Celebrity")
         .navigationBarTitleDisplayMode(.inline)
         .tint(Theme.cyan400)

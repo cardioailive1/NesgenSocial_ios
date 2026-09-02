@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class PostDetailViewModel: ObservableObject {
+final class PostDetailViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var comments: [Comment] = []
     @Published private(set) var notes: [ContextNote] = []
     @Published var draft = ""
@@ -18,14 +18,13 @@ final class PostDetailViewModel: ObservableObject {
     /// Comments and notes are independent, so they're fetched together rather
     /// than one after the other.
     func load() async {
-        async let loadedComments = PostsService.comments(for: post.id)
-        async let loadedNotes = PostsService.contextNotes(for: post.id)
-        do {
+        // `async let` can't cross a closure boundary, so the pair is started
+        // inside `attempt` rather than around it.
+        await attempt { [post] in
+            async let loadedComments = PostsService.comments(for: post.id)
+            async let loadedNotes = PostsService.contextNotes(for: post.id)
             comments = try await loadedComments
             notes = try await loadedNotes
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

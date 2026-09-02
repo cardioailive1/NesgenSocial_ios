@@ -11,8 +11,11 @@ enum CallsService {
                                         as: CallResponse.self).call
     }
 
+    /// Polled. `maxAge: 0` throughout this file's live routes -- a cached
+    /// answer here would mean a missed call or a call screen that never ends.
     static func incoming() async throws -> Call? {
-        try await APIClient.shared.get(APIEndpoints.Calls.incoming, as: IncomingCallResponse.self).call
+        try await APIClient.shared.get(APIEndpoints.Calls.incoming,
+                                       as: IncomingCallResponse.self, maxAge: 0).call
     }
 
     /// Both sides of every call, newest first (the server caps it at 50).
@@ -21,7 +24,8 @@ enum CallsService {
     }
 
     static func details(_ callId: String) async throws -> Call {
-        try await APIClient.shared.get(APIEndpoints.Calls.details(callId), as: CallResponse.self).call
+        try await APIClient.shared.get(APIEndpoints.Calls.details(callId),
+                                       as: CallResponse.self, maxAge: 0).call
     }
 
     static func setStatus(_ status: String, callId: String) async throws {

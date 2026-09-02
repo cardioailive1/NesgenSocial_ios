@@ -43,11 +43,7 @@ struct NewAdView: View {
                         }
                         AttachmentStrip(attachments: $model.attachments)
 
-                        if let errorMessage = model.errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.danger)
-                        }
+                        ErrorBanner(message: model.errorMessage)
 
                         if model.created != nil {
                             VStack(alignment: .leading, spacing: 8) {

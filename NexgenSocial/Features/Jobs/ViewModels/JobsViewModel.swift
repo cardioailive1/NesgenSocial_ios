@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class JobsViewModel: ObservableObject {
+final class JobsViewModel: ObservableObject, LoadingViewModel {
 
     enum Tab: Int, CaseIterable { case browse, applications, postings, post }
 
@@ -27,15 +27,12 @@ final class JobsViewModel: ObservableObject {
     }
 
     func loadJobs() async {
-        do {
+        await attempt {
             jobs = try await JobsService.browse(query: query,
                                                 arrangement: arrangement,
                                                 employmentType: employmentType,
                                                 location: location,
                                                 minSalary: minSalary)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

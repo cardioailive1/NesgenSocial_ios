@@ -18,12 +18,7 @@ struct CirclesView: View {
                             .padding(.horizontal, 14)
                     }
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                            .padding(.horizontal, 14)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     ForEach(model.circles) { circle in
                         NavigationLink {
@@ -48,7 +43,7 @@ struct CirclesView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("Circles")
         .navigationBarTitleDisplayMode(.inline)
@@ -84,12 +79,7 @@ struct CircleDetailView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        if let errorMessage = model.errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.danger)
-                                .padding(.horizontal, 14)
-                        }
+                        ErrorBanner(message: model.errorMessage)
                         ForEach(model.members) { membership in
                             FriendRow(user: membership.user,
                                       subtitle: "@\(membership.user?.username ?? "")") {
@@ -163,11 +153,7 @@ struct NewCircleView: View {
                         .autocorrectionDisabled()
                         .lineLimit(2...4)
                         .fieldStyle()
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: errorMessage)
                     Spacer()
                 }
                 .padding(16)

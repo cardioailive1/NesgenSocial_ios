@@ -5,8 +5,14 @@ struct AvatarView: View {
     let seed: String
     var size: CGFloat = 40
 
+    @Environment(\.displayScale) private var displayScale
+
     var body: some View {
-        AsyncImage(url: APIClient.mediaURL(url)) { phase in
+        // Decoded at the size it is drawn: an avatar is 40 pt, so the full
+        // upload behind it is thousands of times more pixels than the circle
+        // can show, and a feed draws dozens of them.
+        CachedImage(url: APIClient.mediaURL(url),
+                    maxPixelSize: size * displayScale) { phase in
             if case .success(let image) = phase {
                 image.resizable().aspectRatio(contentMode: .fill)
             } else {

@@ -1,22 +1,19 @@
 import Foundation
 
 @MainActor
-final class CirclesViewModel: ObservableObject {
+final class CirclesViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var circles: [AudienceCircle] = []
     @Published var errorMessage: String?
 
     func load() async {
-        do {
+        await attempt {
             circles = try await CirclesService.all()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }
 
 @MainActor
-final class CircleDetailViewModel: ObservableObject {
+final class CircleDetailViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var members: [CircleMembership] = []
     @Published var newUsername = ""
     @Published var errorMessage: String?

@@ -1,18 +1,23 @@
 import SwiftUI
 
-/// `AsyncImage` gives up permanently on its first failure, which is how a
+/// A remote picture that survives a failed load.
+///
+/// The underlying `CachedImage` gives up after one failure, which is how a
 /// feed ends up with a broken-image box for a picture that loads perfectly
 /// well when opened. Under a burst of parallel requests a timeout is common
 /// and temporary, so this retries a couple of times before showing anything,
 /// and offers a manual retry after that.
 struct RetryingImage: View {
     let url: URL?
+    /// Feed cards draw at most the screen's width; anything larger is decode
+    /// work and memory spent on pixels that are never seen.
+    var maxPixelSize: CGFloat = 1400
     private let maxAutomaticRetries = 2
 
     @State private var attempt = 0
 
     var body: some View {
-        AsyncImage(url: url) { phase in
+        CachedImage(url: url, maxPixelSize: maxPixelSize) { phase in
             switch phase {
             case .success(let image):
                 // .fit, not .fill: cropping a portrait photo to a landscape
@@ -38,7 +43,7 @@ struct RetryingImage: View {
                         .foregroundStyle(Theme.slate400)
                     }
                 }
-            default:
+            case .loading:
                 ProgressView().tint(Theme.cyan400)
             }
         }

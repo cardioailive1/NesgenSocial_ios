@@ -1,39 +1,33 @@
 import Foundation
 
 @MainActor
-final class PoliticalViewModel: ObservableObject {
+final class PoliticalViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var pages: [PoliticalPage] = []
     @Published var typeFilter = ""
     @Published var errorMessage: String?
 
     func load() async {
-        do {
+        await attempt {
             pages = try await PoliticalService.pages(type: typeFilter)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }
 
 @MainActor
-final class PoliticalArchiveViewModel: ObservableObject {
+final class PoliticalArchiveViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var ads: [PoliticalAd] = []
     @Published var query = ""
     @Published var errorMessage: String?
 
     func load() async {
-        do {
+        await attempt {
             ads = try await PoliticalService.archive(query: query)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }
 
 @MainActor
-final class CreatePoliticalPageViewModel: ObservableObject {
+final class CreatePoliticalPageViewModel: ObservableObject, LoadingViewModel {
     @Published var type = "CANDIDATE"
     @Published var name = ""
     @Published var organization = ""
@@ -69,7 +63,7 @@ final class CreatePoliticalPageViewModel: ObservableObject {
 }
 
 @MainActor
-final class PoliticalPageViewModel: ObservableObject {
+final class PoliticalPageViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var posts: [PoliticalPost] = []
     @Published private(set) var isFollowing = false
     @Published var errorMessage: String?

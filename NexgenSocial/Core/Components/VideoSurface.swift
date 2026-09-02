@@ -83,30 +83,46 @@ struct PlaysWhenVisible<Content: View>: View {
         content(shouldPlay)
             .background(
                 GeometryReader { geometry in
-                    Color.clear.preference(key: VisibleFractionKey.self,
-                                           value: visibleFraction(of: geometry.frame(in: .global)))
+                    // The threshold is applied here rather than in
+                    // `onPreferenceChange`: a preference value propagates up
+                    // the whole view tree every time it changes, and a raw
+                    // fraction changes on every frame of every scroll, for
+                    // every card. A Bool changes only when playback actually
+                    // has to flip.
+                    Color.clear.preference(
+                        key: IsVisibleKey.self,
+                        value: isSubstantiallyVisible(geometry)
+                    )
                 }
             )
-            .onPreferenceChange(VisibleFractionKey.self) { fraction in
-                // Hysteresis, so a video doesn't stop and start repeatedly
-                // while someone holds a card near the threshold.
-                let next = isVisible ? fraction > 0.25 : fraction > 0.6
+            .onPreferenceChange(IsVisibleKey.self) { next in
                 if next != isVisible { isVisible = next }
             }
     }
 
-    private func visibleFraction(of frame: CGRect) -> CGFloat {
-        guard frame.height > 0 else { return 0 }
-        let screen = UIScreen.main.bounds
-        let overlap = frame.intersection(screen).height
-        return max(0, overlap / frame.height)
+    /// Hysteresis, so a video doesn't stop and start repeatedly while someone
+    /// holds a card near the threshold: harder to start than to keep going.
+    private func isSubstantiallyVisible(_ geometry: GeometryProxy) -> Bool {
+        let frame = geometry.frame(in: .global)
+        guard frame.height > 0 else { return false }
+        // The window's bounds, not `UIScreen.main.bounds`: under Stage
+        // Manager and Slide Over the app owns a fraction of the screen, and
+        // measuring against the whole display calls off-screen cards visible.
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
+            .first else { return false }
+
+        let overlap = frame.intersection(window.bounds).height
+        let fraction = max(0, overlap / frame.height)
+        return isVisible ? fraction > 0.25 : fraction > 0.6
     }
 }
 
-private struct VisibleFractionKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+private struct IsVisibleKey: PreferenceKey {
+    static var defaultValue = false
+    /// Any visible part of the subtree counts, matching the old `max`.
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
     }
 }
 

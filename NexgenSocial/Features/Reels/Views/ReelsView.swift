@@ -61,10 +61,15 @@ struct ReelsView: View {
                     .scrollTargetBehavior(.paging)
                     .scrollPosition(id: $currentID)
                     .scrollIndicators(.hidden)
-                    .onAppear { currentID = currentID ?? model.reels.first?.id }
+                    .onAppear {
+                        currentID = currentID ?? model.reels.first?.id
+                        prefetchNeighbours(of: currentID)
+                    }
                     .onChange(of: model.reels.count) { _, _ in
                         if currentID == nil { currentID = model.reels.first?.id }
+                        prefetchNeighbours(of: currentID)
                     }
+                    .onChange(of: currentID) { _, id in prefetchNeighbours(of: id) }
                 }
             }
         }
@@ -72,6 +77,19 @@ struct ReelsView: View {
         .task { await model.load() }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
+    }
+
+    /// Warms the reel after the current one, and the one before it, so a swipe
+    /// in either direction finds an asset that is already open.
+    private func prefetchNeighbours(of id: String?) {
+        guard let id, let index = model.reels.firstIndex(where: { $0.id == id }) else { return }
+        for neighbour in [index + 1, index - 1] where model.reels.indices.contains(neighbour) {
+            let reel = model.reels[neighbour]
+            ReelPrefetcher.prefetch(APIClient.mediaURL(reel.videoUrl))
+            // The poster is what the next swipe actually shows first, so it
+            // matters more than the video bytes.
+            ReelPrefetcher.prefetchPoster(APIClient.mediaURL(reel.thumbnailUrl))
+        }
     }
 }
 
@@ -84,6 +102,10 @@ struct ReelCell: View {
     @State private var player: AVPlayer?
     @State private var watchedSeconds: Double = 0
     @State private var timeObserver: Any?
+    /// Held so `stop()` can remove it. Dropping this token leaked one
+    /// `AVPlayer` -- and its decode buffers -- per reel scrolled past, because
+    /// the block below retains the player it restarts.
+    @State private var endObserver: NSObjectProtocol?
 
     private var url: URL? { APIClient.mediaURL(reel.videoUrl) }
 
@@ -96,6 +118,20 @@ struct ReelCell: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.black
+
+            // Poster frame behind the player. The server sends a thumbnail
+            // for every reel and the app was ignoring it, so a reel was black
+            // until its first video frame decoded -- which on the WebKit path
+            // (every WebM reel, i.e. everything the website uploaded) is well
+            // over a second. The video covers this once it starts.
+            if let poster = APIClient.mediaURL(reel.thumbnailUrl) {
+                CachedImage(url: poster) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    }
+                }
+                .clipped()
+            }
 
             if needsWebKit {
                 if isActive {
@@ -167,12 +203,15 @@ struct ReelCell: View {
         // The web view starts itself as soon as it appears.
         guard !needsWebKit, let url else { return }
         MediaAudio.activateForPlayback()
-        let item = AVPlayerItem(url: url)
+        // Reuses the asset the pager warmed while the previous reel was
+        // playing, so the swipe lands on something already opened rather than
+        // on a cold HTTP request.
+        let item = AVPlayerItem(asset: ReelPrefetcher.asset(for: url))
         let newPlayer = AVPlayer(playerItem: item)
         newPlayer.actionAtItemEnd = .none
 
         // Loop. Replays are a genuine ranking signal, not just a nicety.
-        NotificationCenter.default.addObserver(
+        endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
         ) { _ in
             Task { @MainActor in await onWatched(reel.durationSec ?? watchedSeconds, true) }
@@ -196,8 +235,52 @@ struct ReelCell: View {
         }
         if let timeObserver { player?.removeTimeObserver(timeObserver) }
         timeObserver = nil
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
         player?.pause()
+        // Detaching the item releases its buffers now rather than whenever
+        // the player itself is finally collected.
+        player?.replaceCurrentItem(with: nil)
         player = nil
         watchedSeconds = 0
+    }
+}
+
+/// Opens the next reel's asset while the current one is still playing.
+///
+/// `AVPlayerItem(url:)` does no work until it is attached to a player, so a
+/// swipe used to pay for the connection, the headers and the first byte range
+/// all at once -- which is the black frame between reels. Warming the asset
+/// moves that cost into the seconds someone spends watching the reel before.
+@MainActor
+enum ReelPrefetcher {
+    private static var assets: [URL: AVURLAsset] = [:]
+    private static var order: [URL] = []
+    /// The reel on screen, one either side, and one spare. Anything more is a
+    /// scrollback of open connections nobody is going to watch again.
+    private static let capacity = 4
+
+    static func asset(for url: URL) -> AVURLAsset {
+        if let existing = assets[url] { return existing }
+        let asset = AVURLAsset(url: url)
+        assets[url] = asset
+        order.append(url)
+        while order.count > capacity {
+            assets.removeValue(forKey: order.removeFirst())
+        }
+        return asset
+    }
+
+    /// Warms the poster image, which is drawn before any video frame exists.
+    static func prefetchPoster(_ url: URL?) {
+        guard let url else { return }
+        Task.detached(priority: .utility) { _ = try? await ImageCache.image(for: url, maxPixel: 1400) }
+    }
+
+    /// Loading `isPlayable` is what actually issues the first request.
+    static func prefetch(_ url: URL?) {
+        guard let url, assets[url] == nil else { return }
+        let asset = asset(for: url)
+        Task.detached(priority: .utility) { _ = try? await asset.load(.isPlayable) }
     }
 }

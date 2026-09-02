@@ -1,17 +1,14 @@
 import Foundation
 
 @MainActor
-final class InviteViewModel: ObservableObject {
+final class InviteViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var invites: [Invite] = []
     @Published private(set) var isCreating = false
     @Published var errorMessage: String?
 
     func load() async {
-        do {
+        await attempt {
             invites = try await SocialAccountsService.invites()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

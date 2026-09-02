@@ -57,7 +57,7 @@ struct PoliticalView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("Political")
         .navigationBarTitleDisplayMode(.inline)
@@ -112,7 +112,7 @@ struct PoliticalArchiveView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("Ad archive")
         .navigationBarTitleDisplayMode(.inline)
@@ -227,11 +227,7 @@ struct CreatePoliticalPageView: View {
                                 .foregroundStyle(Theme.cyan300)
                         }
 
-                        if let errorMessage = model.errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.danger)
-                        }
+                        ErrorBanner(message: model.errorMessage)
                     }
                     .padding(16)
                 }
@@ -361,11 +357,8 @@ struct PoliticalPageView: View {
                     }
 
                     SectionHeader("Posts")
-                    if let error = model.errorMessage {
-                        Text(error)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, 14)
+                    if model.errorMessage != nil {
+                        ErrorBanner(message: model.errorMessage)
                     } else if model.posts.isEmpty {
                         Text("No posts yet.")
                             .font(.system(size: 13))
@@ -389,7 +382,7 @@ struct PoliticalPageView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle(page.name)
         .navigationBarTitleDisplayMode(.inline)

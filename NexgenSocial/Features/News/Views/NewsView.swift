@@ -11,12 +11,7 @@ struct NewsView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                            .padding(.horizontal, 14)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     if !model.failedSources.isEmpty {
                         Text("Couldn't reach: \(model.failedSources.joined(separator: ", "))")
@@ -51,46 +46,13 @@ struct NewsView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
 
             if model.isLoading && model.items.isEmpty {
                 ProgressView().tint(Theme.cyan400)
             }
         }
         .navigationTitle("Breaking")
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await model.load() }
-    }
-}
-
-/// Newsrooms publishing on the platform, and their articles.
-struct NewsroomsView: View {
-    @StateObject private var model = NewsroomsViewModel()
-
-    var body: some View {
-        ZStack {
-            Theme.navy950.ignoresSafeArea()
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if model.newsrooms.isEmpty {
-                        Text("No newsrooms yet.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.slate400)
-                            .padding(.horizontal, 14)
-                    }
-                    ForEach(model.newsrooms) { newsroom in
-                        NavigationLink { NewsroomDetailView(slug: newsroom.slug) } label: {
-                            NewsroomCard(newsroom: newsroom)
-                        }
-                        .padding(.horizontal, 14)
-                    }
-                }
-                .padding(.vertical, 12)
-            }
-            .refreshable { await model.load() }
-        }
-        .navigationTitle("Newsrooms")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
     }
@@ -177,7 +139,7 @@ struct NewsroomDetailView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle(model.newsroom?.name ?? "Newsroom")
         .navigationBarTitleDisplayMode(.inline)
@@ -187,6 +149,9 @@ struct NewsroomDetailView: View {
 
 struct ArticleCard: View {
     let article: NewsArticle
+    /// Stories run long; the card shows the top of one and opens on demand,
+    /// as "Read full story" does on the web.
+    @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -209,19 +174,35 @@ struct ArticleCard: View {
             if let media = article.media, !media.isEmpty {
                 MediaCarousel(items: media)
             }
-            if let body = article.body {
+            if let body = article.body, !body.isEmpty {
                 Text(body)
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.slate300)
+                    .lineLimit(expanded ? nil : 3)
+                Button(expanded ? "Show less" : "Read full story") { expanded.toggle() }
+                    .font(.system(size: 12))
+                    .tint(Theme.cyan400)
             }
-            if let byline = article.byline {
-                Text("By \(byline)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.slate400)
-            }
+            Text(footnote)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.slate400)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .card()
+    }
+
+    private var footnote: String {
+        var parts: [String] = []
+        if let newsroom = article.newsroom?.name { parts.append(newsroom) }
+        if let byline = article.byline { parts.append("By \(byline)") }
+        if let published = article.publishedAt { parts.append(Self.day(published)) }
+        if article.correctedAt != nil { parts.append("Corrected") }
+        return parts.joined(separator: " · ")
+    }
+
+    private static func day(_ iso: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: iso) else { return "" }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 }

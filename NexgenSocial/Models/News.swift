@@ -45,6 +45,8 @@ struct NewsroomRef: Codable, Hashable {
     let name: String
     var slug: String?
     var verified: Bool?
+    var organization: String?
+    var avatarUrl: String?
 }
 
 struct NewsArticle: Codable, Identifiable, Hashable {
@@ -56,7 +58,16 @@ struct NewsArticle: Codable, Identifiable, Hashable {
     var isBreaking: Bool?
     var publishedAt: String?
     var media: [MediaItem]?
+    /// Only present on the coverage feed, where one card can come from any
+    /// newsroom.
+    var newsroom: NewsroomRef?
+    /// Shown, not hidden: a story that quietly changes after publication is
+    /// a trust problem.
+    var correctedAt: String?
 }
 
 struct NewsroomsResponse: Codable { let newsrooms: [Newsroom] }
 struct NewsroomResponse: Codable { let newsroom: Newsroom }
+
+struct NewsArticlesResponse: Codable { let articles: [NewsArticle] }
+struct NewsArticleResponse: Codable { let article: NewsArticle }

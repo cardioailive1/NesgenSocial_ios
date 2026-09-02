@@ -35,7 +35,15 @@ actor APIClient {
     /// Change this to point at a local backend during development.
     static let baseURL = "https://nexgensocial-udp.fly.dev"
 
+    /// The web app, not the API. Only used to build links people open in a
+    /// browser -- shared meeting links, for one.
+    static let webBaseURL = "https://nexgensocialnet.com"
+
     private let session: URLSession
+    /// One decoder for the app's lifetime. `perform` built a fresh one per
+    /// response -- and a second one on every error path -- which is pure
+    /// setup cost repeated once per request.
+    private let decoder = JSONDecoder()
 
     /// `session` is injectable only so tests can hand in a `URLProtocol`-backed
     /// one. The app always takes the default.
@@ -58,6 +66,12 @@ actor APIClient {
     private var cachedToken: String?
 
     func setToken(_ token: String?) {
+        // Signing in or out changes whose data this is. Nothing cached under
+        // the previous session may survive into the next one. Unconditional
+        // rather than only on a change: `cachedToken` can still be nil while
+        // a token sits in the keychain, and guessing wrong here would serve
+        // one account's feed to another.
+        ResponseCache.clear()
         cachedToken = token
         if let token {
             KeychainStore.save(token, for: "ngs_token")
@@ -90,6 +104,25 @@ actor APIClient {
     }
 
     private func perform<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
+        let data = try await performData(request)
+
+        if T.self == EmptyResponse.self, let empty = EmptyResponse() as? T {
+            return empty
+        }
+        return try decode(data, as: T.self)
+    }
+
+    private func decode<T: Decodable>(_ data: Data, as type: T.Type) throws -> T {
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding(String(describing: error))
+        }
+    }
+
+    /// The transport half of `perform`: status handling, no decoding. Split
+    /// out so `get` can cache the raw body it is about to decode.
+    private func performData(_ request: URLRequest) async throws -> Data {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
@@ -111,48 +144,98 @@ actor APIClient {
         guard (200..<300).contains(http.statusCode) else {
             // Surface the server's own message when it sends one -- it's
             // almost always more useful than a generic status code.
-            if let apiError = try? JSONDecoder().decode(APIMessage.self, from: data),
+            if let apiError = try? decoder.decode(APIMessage.self, from: data),
                let message = apiError.error {
                 throw APIError.server(message)
             }
             throw APIError.server("Request failed (\(http.statusCode)).")
         }
 
-        if T.self == EmptyResponse.self, let empty = EmptyResponse() as? T {
-            return empty
-        }
-
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw APIError.decoding(String(describing: error))
-        }
+        return data
     }
 
     // MARK: - Verbs
 
-    func get<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {
-        try await perform(makeRequest(path), as: type)
+    /// Stale-while-revalidate.
+    ///
+    /// A body younger than `maxAge` is returned straight from
+    /// `ResponseCache` -- no network, no spinner -- and a refresh is started
+    /// behind it so the next open is current. Past `maxAge` the request is
+    /// made normally. If that request fails, the last known good body is
+    /// returned at any age, which is what keeps every screen readable with no
+    /// signal instead of showing an error where content used to be.
+    ///
+    /// Pass `maxAge: 0` for anything polled (messages, call status): serving
+    /// those from a cache is the one thing that would actually break.
+    func get<T: Decodable>(_ path: String, as type: T.Type,
+                           maxAge: TimeInterval = 300) async throws -> T {
+        if maxAge > 0, !ResponseCache.bypass, let hit = ResponseCache.load(path), hit.age < maxAge,
+           let cached = try? decoder.decode(T.self, from: hit.data) {
+            Task { [weak self] in _ = try? await self?.fetchAndStore(path) }
+            return cached
+        }
+
+        do {
+            return try decode(try await fetchAndStore(path), as: T.self)
+        } catch APIError.network(let detail) {
+            // Only a transport failure falls back to the cache -- no signal,
+            // a timeout. A 500 or a 401 is the server's actual answer and has
+            // to reach the screen, or the error handling the app already has
+            // gets silently papered over with old content.
+            guard let hit = ResponseCache.load(path),
+                  let cached = try? decoder.decode(T.self, from: hit.data)
+            else { throw APIError.network(detail) }
+            return cached
+        }
     }
 
-    func post<T: Decodable>(_ path: String, body: [String: Any]? = nil, as type: T.Type) async throws -> T {
+    @discardableResult
+    private func fetchAndStore(_ path: String) async throws -> Data {
+        let data = try await performData(makeRequest(path))
+        ResponseCache.save(data, for: path)
+        return data
+    }
+
+    /// Writing anything drops the cached reads.
+    ///
+    /// Deliberately all of them rather than trying to work out which lists a
+    /// given write affects: posting to a group changes the group feed, the
+    /// main feed and the profile, and a mapping like that goes wrong quietly.
+    /// The cost of being wrong is a stale screen contradicting something the
+    /// person just did; the cost of clearing everything is the app refetching
+    /// exactly as it did before this cache existed.
+    ///
+    /// `invalidates: false` is for writes that record something rather than
+    /// change anything the user reads back -- ad impressions, reel watch time.
+    /// Those fire constantly and would otherwise keep the cache permanently
+    /// empty.
+    func post<T: Decodable>(_ path: String, body: [String: Any]? = nil, as type: T.Type,
+                            invalidates: Bool = true) async throws -> T {
         let data = body.map { try? JSONSerialization.data(withJSONObject: $0) } ?? nil
-        return try await perform(makeRequest(path, method: "POST", body: data ?? Data("{}".utf8)), as: type)
+        let result = try await perform(makeRequest(path, method: "POST", body: data ?? Data("{}".utf8)), as: type)
+        if invalidates { ResponseCache.clear() }
+        return result
     }
 
     func patch<T: Decodable>(_ path: String, body: [String: Any]? = nil, as type: T.Type) async throws -> T {
         let data = body.map { try? JSONSerialization.data(withJSONObject: $0) } ?? nil
-        return try await perform(makeRequest(path, method: "PATCH", body: data ?? Data("{}".utf8)), as: type)
+        let result = try await perform(makeRequest(path, method: "PATCH", body: data ?? Data("{}".utf8)), as: type)
+        ResponseCache.clear()
+        return result
     }
 
     func put<T: Decodable>(_ path: String, body: [String: Any]? = nil, as type: T.Type) async throws -> T {
         let data = body.map { try? JSONSerialization.data(withJSONObject: $0) } ?? nil
-        return try await perform(makeRequest(path, method: "PUT", body: data ?? Data("{}".utf8)), as: type)
+        let result = try await perform(makeRequest(path, method: "PUT", body: data ?? Data("{}".utf8)), as: type)
+        ResponseCache.clear()
+        return result
     }
 
     @discardableResult
     func delete(_ path: String) async throws -> EmptyResponse {
-        try await perform(makeRequest(path, method: "DELETE"), as: EmptyResponse.self)
+        let result = try await perform(makeRequest(path, method: "DELETE"), as: EmptyResponse.self)
+        ResponseCache.clear()
+        return result
     }
 
     /// POST that reports the status code and the raw body instead of
@@ -202,7 +285,11 @@ actor APIClient {
 
         let request = try makeRequest(path, method: "POST", body: body,
                                       contentType: "multipart/form-data; boundary=\(boundary)")
-        return try await perform(request, as: type)
+        let result = try await perform(request, as: type)
+        // An upload is always a new post, message or avatar -- every list that
+        // could show it is now out of date.
+        ResponseCache.clear()
+        return result
     }
 
     /// Absolute URL for a media path returned by the API.

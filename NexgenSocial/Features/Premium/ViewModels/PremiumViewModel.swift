@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class PremiumViewModel: ObservableObject {
+final class PremiumViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var tier = "FREE"
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
@@ -9,11 +9,8 @@ final class PremiumViewModel: ObservableObject {
     var isPremium: Bool { tier == "PREMIUM" }
 
     func load() async {
-        do {
+        await attempt {
             tier = try await PremiumService.currentTier()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

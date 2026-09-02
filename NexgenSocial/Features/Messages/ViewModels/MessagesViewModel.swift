@@ -13,7 +13,7 @@ enum MessagesTab: String, CaseIterable, Identifiable {
 /// of state: opening a conversation from search has to land in the same list
 /// the screen is already showing.
 @MainActor
-final class MessagesViewModel: ObservableObject {
+final class MessagesViewModel: ObservableObject, LoadingViewModel {
 
     @Published var conversations: [Conversation] = []
     @Published var isLoading = false
@@ -39,11 +39,8 @@ final class MessagesViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
-        do {
+        await attempt {
             conversations = try await MessagesService.conversations()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

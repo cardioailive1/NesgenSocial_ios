@@ -49,6 +49,9 @@ enum AdsService {
     static func track(_ type: String, adId: String) async {
         _ = try? await APIClient.shared.post(APIEndpoints.Ads.events,
                                              body: ["adId": adId, "type": type],
-                                             as: EmptyResponse.self)
+                                             as: EmptyResponse.self,
+                                             // Records an impression; changes
+                                             // nothing anyone reads back.
+                                             invalidates: false)
     }
 }

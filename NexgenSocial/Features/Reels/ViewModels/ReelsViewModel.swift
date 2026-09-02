@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class ReelsViewModel: ObservableObject {
+final class ReelsViewModel: ObservableObject, LoadingViewModel {
     @Published var reels: [Reel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -9,11 +9,8 @@ final class ReelsViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
-        do {
+        await attempt {
             reels = try await ReelsService.discover()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

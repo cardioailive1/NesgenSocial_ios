@@ -114,6 +114,8 @@ enum APIEndpoints {
         static let newsrooms = "/api/newsrooms"
         static func newsroom(_ slug: String) -> String { "/api/newsrooms/\(slug)" }
         static func follow(_ id: String) -> String { "/api/newsrooms/\(id)/follow" }
+        static let latestArticles = "/api/newsrooms/feed/latest"
+        static func articles(_ id: String) -> String { "/api/newsrooms/\(id)/articles" }
     }
 
     enum Sports {
@@ -142,6 +144,22 @@ enum APIEndpoints {
         static func start(_ id: String) -> String { "/api/meetings/\(id)/start" }
         static func end(_ id: String) -> String { "/api/meetings/\(id)/end" }
         static func myStatus(_ id: String) -> String { "/api/meetings/\(id)/my-status" }
+        static func detail(_ id: String) -> String { "/api/meetings/\(id)" }
+        static func settings(_ id: String) -> String { "/api/meetings/\(id)/settings" }
+        static func invite(_ id: String) -> String { "/api/meetings/\(id)/invite" }
+        static func chat(_ id: String) -> String { "/api/meetings/\(id)/chat" }
+        static func admit(_ id: String, _ participantId: String) -> String {
+            "/api/meetings/\(id)/participants/\(participantId)/admit"
+        }
+        static func mute(_ id: String, _ participantId: String) -> String {
+            "/api/meetings/\(id)/participants/\(participantId)/mute"
+        }
+        static func remove(_ id: String, _ participantId: String) -> String {
+            "/api/meetings/\(id)/participants/\(participantId)/remove"
+        }
+        static func role(_ id: String, _ participantId: String) -> String {
+            "/api/meetings/\(id)/participants/\(participantId)/role"
+        }
     }
 
     enum Marketplace {

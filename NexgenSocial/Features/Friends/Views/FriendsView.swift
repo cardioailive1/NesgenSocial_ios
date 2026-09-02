@@ -38,13 +38,7 @@ struct FriendsView: View {
                             .padding(.horizontal, 14)
                     }
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                            .padding(.horizontal, 14)
-                            .accessibilityIdentifier("error-banner")
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     SectionHeader("Requests waiting on you (\(model.incoming.count))")
                     if model.incoming.isEmpty {
@@ -118,7 +112,7 @@ struct FriendsView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("Friends")
         .navigationBarTitleDisplayMode(.inline)

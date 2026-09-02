@@ -21,6 +21,13 @@ struct NexgenSocialApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // The default shared cache is a few megabytes, which a feed of photos
+        // evicts within one screenful -- so scrolling back up re-downloads
+        // everything. `URLSession.shared` (which is what loads images) picks
+        // this up automatically.
+        URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024,
+                                   diskCapacity: 512 * 1024 * 1024)
+
         UNUserNotificationCenter.current().delegate = self
         PushLog.write("app launched — notification delegate set, registering for VoIP pushes")
         // VoIP registration must happen at launch, not lazily: iOS only

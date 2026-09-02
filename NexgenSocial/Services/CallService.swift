@@ -295,7 +295,16 @@ final class CallService: NSObject, ObservableObject {
     /// needs an APNs `.p8` key configured on the server. Until that is in
     /// place -- and afterwards, for pushes that simply don't arrive -- this
     /// poll is what surfaces an incoming call at all.
+    /// Only runs while the app is in the foreground -- the caller cancels
+    /// this task when the scene leaves `.active`, because a backgrounded or
+    /// terminated app is exactly what VoIP push is for, and polling there was
+    /// 1,200 pointless requests an hour.
     func pollForIncomingCalls() async {
+        // Quiet minutes are the normal case, so the interval opens out rather
+        // than hammering a 3-second poll all day. It snaps back to 3 as soon
+        // as anything rings, which is when latency actually matters.
+        var idlePolls = 0
+
         while !Task.isCancelled {
             // `currentCallUUID` is only set once CallKit calls back, so a
             // pushed call is invisible to this guard for a moment --
@@ -304,15 +313,21 @@ final class CallService: NSObject, ObservableObject {
                 let incoming = try? await CallsService.incoming()
                 if let call = incoming, call.id != lastReportedCallId {
                     lastReportedCallId = call.id
+                    idlePolls = 0
                     reportIncomingCall(callId: call.id,
                                        callerName: call.caller?.displayName ?? "Incoming call",
                                        hasVideo: call.kind == "VIDEO")
                     // After reporting, which resets it: the poll already has
                     // the full call, so answering needs no extra fetch.
                     pendingCall = call
+                } else {
+                    idlePolls += 1
                 }
+            } else {
+                idlePolls = 0
             }
-            try? await Task.sleep(for: .seconds(3))
+            // 3s for the first minute of quiet, then 10s.
+            try? await Task.sleep(for: .seconds(idlePolls > 20 ? 10 : 3))
         }
     }
 

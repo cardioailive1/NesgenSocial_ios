@@ -30,6 +30,14 @@ struct Post: Codable, Identifiable {
     }
 }
 
+/// Identity is the id alone, which is what `navigationDestination(item:)`
+/// needs. Comparing every field would make a like-count refresh look like a
+/// different post and re-push the detail screen.
+extension Post: Hashable {
+    static func == (lhs: Post, rhs: Post) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
 // MARK: - Comments and context notes
 
 struct Comment: Codable, Identifiable {

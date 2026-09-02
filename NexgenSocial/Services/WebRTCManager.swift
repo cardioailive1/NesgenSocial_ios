@@ -25,6 +25,11 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     /// Remote participant's video, published for the call UI to render.
     @Published private(set) var remoteVideoTrack: RTCVideoTrack?
+    /// Every remote video in the room, keyed by the server's peer id. A call
+    /// has one entry; a meeting has one per participant, which is what the
+    /// meeting grid renders. `remoteVideoTrack` stays the most recent one so
+    /// the call screen and the floating tile keep working unchanged.
+    @Published private(set) var remoteTracks: [String: RTCVideoTrack] = [:]
     @Published private(set) var localVideoTrack: RTCVideoTrack?
     @Published private(set) var isConnected = false
     /// Media is down but a retry is in flight. A blip on the network -- a
@@ -217,7 +222,8 @@ final class WebRTCManager: NSObject, ObservableObject {
                 for producer in existing {
                     if let producerId = producer["producerId"] as? String,
                        let kind = producer["kind"] as? String {
-                        await consume(producerId: producerId, kind: kind)
+                        await consume(producerId: producerId, kind: kind,
+                                      peerId: producer["peerId"] as? String)
                     }
                 }
             }
@@ -389,7 +395,7 @@ final class WebRTCManager: NSObject, ObservableObject {
 
     // MARK: - Consuming
 
-    fileprivate func consume(producerId: String, kind: String) async {
+    fileprivate func consume(producerId: String, kind: String, peerId: String? = nil) async {
         guard let device, let receiveTransport else { return }
         do {
             let capabilities = try device.rtpCapabilities()
@@ -420,6 +426,7 @@ final class WebRTCManager: NSObject, ObservableObject {
 
             if let track = consumer.track as? RTCVideoTrack {
                 remoteVideoTrack = track
+                remoteTracks[peerId ?? producerId] = track
             }
         } catch {
             print("Consume failed for producer \(producerId): \(error)")
@@ -488,8 +495,11 @@ final class WebRTCManager: NSObject, ObservableObject {
             reconnect = nil
             isReconnecting = false
             disconnect()
-            lastError = "The call connection was lost."
-            CallService.shared.endCall()
+            lastError = "The connection was lost."
+            // A meeting or a livestream has no CallKit call behind it;
+            // ending one from here tore down whatever call had been made
+            // before it, or nothing at all.
+            if params.roomId.hasPrefix("call-") { CallService.shared.endCall() }
         }
     }
 
@@ -517,6 +527,7 @@ final class WebRTCManager: NSObject, ObservableObject {
         device = nil
 
         remoteVideoTrack = nil
+        remoteTracks.removeAll()
         localVideoTrack = nil
 
         RTCAudioSession.sharedInstance().isAudioEnabled = false
@@ -618,10 +629,20 @@ final class WebRTCManager: NSObject, ObservableObject {
         case "newProducer":
             if let producerId = payload["producerId"] as? String,
                let kind = payload["kind"] as? String {
-                Task { await self.consume(producerId: producerId, kind: kind) }
+                let peerId = payload["peerId"] as? String
+                Task { await self.consume(producerId: producerId, kind: kind, peerId: peerId) }
             }
         case "peerClosed":
-            remoteVideoTrack = nil
+            if let peerId = payload["peerId"] as? String {
+                let gone = remoteTracks.removeValue(forKey: peerId)
+                // Only blank the single-track slot if it was this peer's:
+                // clearing it unconditionally wiped everyone else's video
+                // in a meeting whenever one person left.
+                if gone === remoteVideoTrack { remoteVideoTrack = remoteTracks.values.first }
+            } else {
+                remoteTracks.removeAll()
+                remoteVideoTrack = nil
+            }
             // In a call there is only one other peer, so its media going
             // away is the call ending. A meeting or a stream loses one of
             // many peers and carries on.

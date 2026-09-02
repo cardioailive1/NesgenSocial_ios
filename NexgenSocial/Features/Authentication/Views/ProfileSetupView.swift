@@ -22,11 +22,7 @@ struct ProfileSetupView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
                     if let statusMessage = model.statusMessage {
                         Text(statusMessage)
                             .font(.system(size: 13))

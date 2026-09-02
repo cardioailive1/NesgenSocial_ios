@@ -19,12 +19,7 @@ struct LivestreamsView: View {
                             .padding(.horizontal, 14)
                     }
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                            .padding(.horizontal, 14)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     ForEach(model.streams) { stream in
                         Button {
@@ -57,7 +52,7 @@ struct LivestreamsView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("Live")
         .navigationBarTitleDisplayMode(.inline)

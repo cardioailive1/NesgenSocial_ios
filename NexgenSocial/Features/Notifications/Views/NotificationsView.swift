@@ -54,7 +54,7 @@ struct NotificationsView: View {
             }
         }
         .task { await model.load() }
-        .refreshable { await model.load() }
+        .pullToRefresh { await model.load() }
     }
 
     private func row(_ note: UNNotification) -> some View {

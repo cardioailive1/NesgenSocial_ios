@@ -19,6 +19,10 @@ enum ReelsService {
     static func reportView(reelId: String, watchedSec: Double, completed: Bool) async throws {
         _ = try await APIClient.shared.post(APIEndpoints.Reels.view(reelId),
                                             body: ["watchedSec": watchedSec, "completed": completed],
-                                            as: EmptyResponse.self)
+                                            as: EmptyResponse.self,
+                                            // Fires on every reel watched;
+                                            // clearing the cache each time
+                                            // would leave nothing cached.
+                                            invalidates: false)
     }
 }

@@ -1,18 +1,15 @@
 import Foundation
 
 @MainActor
-final class LivestreamsViewModel: ObservableObject {
+final class LivestreamsViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var streams: [Livestream] = []
     @Published var newTitle = ""
     @Published var watching: Livestream?
     @Published var errorMessage: String?
 
     func load() async {
-        do {
+        await attempt {
             streams = try await LivestreamsService.all()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

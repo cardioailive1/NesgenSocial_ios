@@ -32,7 +32,7 @@ struct GroupsView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("Groups")
         .navigationBarTitleDisplayMode(.inline)
@@ -86,6 +86,7 @@ struct GroupDetailView: View {
 
     @StateObject private var model: GroupDetailViewModel
     @State private var pickedItems: [PhotosPickerItem] = []
+    @State private var selectedPost: Post?
 
     init(group: SocialGroup) {
         self.group = group
@@ -112,12 +113,7 @@ struct GroupDetailView: View {
                     }
                     .padding(.horizontal, 14)
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                            .padding(.horizontal, 14)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     SectionHeader("Members")
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -149,17 +145,15 @@ struct GroupDetailView: View {
                             .padding(.horizontal, 14)
                     }
                     ForEach(model.posts) { post in
-                        NavigationLink { PostDetailView(post: post) } label: {
-                            PostCard(post: post, onLike: {})
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 14)
+                        PostCard(post: post, onOpen: { selectedPost = post }, onLike: {})
+                            .padding(.horizontal, 14)
                     }
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
+        .navigationDestination(item: $selectedPost) { PostDetailView(post: $0) }
         .navigationTitle(group.name)
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
@@ -235,11 +229,7 @@ struct NewGroupView: View {
                         .lineLimit(2...5)
                         .fieldStyle()
                     Toggle("Invite-only", isOn: $isPrivate)
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: errorMessage)
                     Spacer()
                 }
                 .tint(Theme.cyan400)

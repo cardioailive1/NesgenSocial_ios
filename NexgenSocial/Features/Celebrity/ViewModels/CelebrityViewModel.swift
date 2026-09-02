@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class CelebrityViewModel: ObservableObject {
+final class CelebrityViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var posts: [Post] = []
     @Published var draft = ""
     @Published var attachments: [PickedAttachment] = []
@@ -13,11 +13,8 @@ final class CelebrityViewModel: ObservableObject {
     var canPost: Bool { !draft.isEmpty || !attachments.isEmpty }
 
     func load() async {
-        do {
+        await attempt {
             posts = try await PostsService.explore(category: Self.category)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

@@ -39,7 +39,7 @@ struct PeopleView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("People")
         .navigationBarTitleDisplayMode(.inline)

@@ -1,9 +1,13 @@
+import WebRTC
 import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject var session: AuthSession
     @EnvironmentObject var callService: CallService
     @Environment(\.scenePhase) private var scenePhase
+    /// Meetings are presented here, not from the Meet tab: leaving the tab
+    /// must not end the meeting, and minimising must keep its media alive.
+    @ObservedObject private var meet = MeetSession.shared
 
     /// The call screen is presented by the call itself, minus the minimised
     /// case. Dismissing minimises rather than clearing `activeCall`, which
@@ -12,6 +16,13 @@ struct RootView: View {
         Binding(
             get: { callService.isMinimized ? nil : callService.activeCall },
             set: { if $0 == nil { callService.isMinimized = true } }
+        )
+    }
+
+    private var presentedMeeting: Binding<Meeting?> {
+        Binding(
+            get: { meet.isMinimized ? nil : meet.activeMeeting },
+            set: { if $0 == nil { meet.isMinimized = true } }
         )
     }
 
@@ -37,6 +48,9 @@ struct RootView: View {
         .fullScreenCover(item: presentedCall) { call in
             CallView(call: call)
         }
+        .fullScreenCover(item: presentedMeeting) { meeting in
+            MeetingRoomView(meeting: meeting)
+        }
         // Pushes the rest of the app down rather than floating over it, so
         // nothing is ever hidden behind the bar. A video call gets the
         // floating tile below instead -- a bar with no picture is a poor way
@@ -51,6 +65,12 @@ struct RootView: View {
             if callService.isMinimized, let call = callService.activeCall,
                call.kind == "VIDEO" {
                 FloatingCallTile()
+            } else if meet.isMinimized, meet.activeMeeting != nil {
+                FloatingVideoTile(track: WebRTCManager.shared.remoteTracks.values.first
+                                      ?? WebRTCManager.shared.localVideoTrack,
+                                  placeholder: "person.2.fill") {
+                    meet.isMinimized = false
+                }
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -65,6 +85,7 @@ struct RootView: View {
 
 struct MainTabView: View {
     @State private var selectedTab = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -95,7 +116,10 @@ struct MainTabView: View {
         }
         .tint(Theme.cyan400)
         .task { await MediaPermissions.requestAll() }
-        .task { await CallService.shared.pollForIncomingCalls() }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await CallService.shared.pollForIncomingCalls()
+        }
         .task {
             // Drains a notification tapped while the app was not running.
             if let link = PushService.shared.pendingDeepLink {
@@ -170,6 +194,20 @@ struct FloatingCallTile: View {
     @EnvironmentObject var callService: CallService
     @ObservedObject private var webRTC = WebRTCManager.shared
 
+    var body: some View {
+        FloatingVideoTile(track: webRTC.remoteVideoTrack, placeholder: "video.fill") {
+            callService.isMinimized = false
+        }
+    }
+}
+
+/// The draggable tile itself. Calls and meetings both minimise to one of
+/// these; only the picture and what a tap returns to differ.
+struct FloatingVideoTile: View {
+    let track: RTCVideoTrack?
+    let placeholder: String
+    let onTap: () -> Void
+
     @State private var center: CGPoint?
 
     private let size = CGSize(width: 108, height: 160)
@@ -194,7 +232,7 @@ struct FloatingCallTile: View {
                         .onChanged { center = $0.location }
                         .onEnded { center = clamped($0.location, in: geo.size) }
                 )
-                .onTapGesture { callService.isMinimized = false }
+                .onTapGesture(perform: onTap)
                 .onChange(of: geo.size) { _, new in
                     // Rotation would otherwise leave it off screen.
                     if let point = center { center = clamped(point, in: new) }
@@ -205,13 +243,13 @@ struct FloatingCallTile: View {
 
     @ViewBuilder
     private var tile: some View {
-        if let remote = webRTC.remoteVideoTrack {
-            VideoTrackView(track: remote)
+        if let track {
+            VideoTrackView(track: track)
         } else {
             // Video calls show the avatar until the far end's track arrives,
             // exactly as the full call screen does.
             Theme.navy800.overlay(
-                Image(systemName: "video.fill")
+                Image(systemName: placeholder)
                     .font(.system(size: 24))
                     .foregroundStyle(Theme.slate400)
             )

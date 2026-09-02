@@ -52,11 +52,7 @@ struct AudiencePlannerView: View {
                         .card()
                     }
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
                 }
                 .padding(14)
             }

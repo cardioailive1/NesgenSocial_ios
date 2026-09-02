@@ -29,7 +29,7 @@ struct SponsoredCard: View {
             }
 
             if let url = APIClient.mediaURL(ad.imageUrl) {
-                AsyncImage(url: url) { phase in
+                CachedImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image.resizable().aspectRatio(contentMode: .fit)
                     }

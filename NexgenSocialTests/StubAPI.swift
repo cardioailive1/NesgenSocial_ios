@@ -17,6 +17,9 @@ enum StubAPI {
     /// `handler` receives every request the app makes and answers with a
     /// status code and a body.
     static func install(_ handler: @escaping (URLRequest) -> (Int, Data)) {
+        // Otherwise one test's response is served to the next from
+        // `ResponseCache`, since every stub answers the same paths.
+        ResponseCache.clear()
         StubURLProtocol.handler = handler
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubURLProtocol.self]
@@ -29,6 +32,7 @@ enum StubAPI {
     }
 
     static func restore() {
+        ResponseCache.clear()
         StubURLProtocol.handler = nil
         APIClient.shared = APIClient()
     }

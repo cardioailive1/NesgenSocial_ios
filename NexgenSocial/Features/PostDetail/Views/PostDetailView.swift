@@ -43,12 +43,7 @@ struct PostDetailView: View {
                                 .padding(.horizontal, 14)
                         }
 
-                        if let errorMessage = model.errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.danger)
-                                .padding(.horizontal, 14)
-                        }
+                        ErrorBanner(message: model.errorMessage)
                     }
                     .padding(.vertical, 12)
                 }

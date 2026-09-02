@@ -7,25 +7,48 @@ struct MediaCarousel: View {
 
     var body: some View {
         PlaysWhenVisible { isVisible in
-            TabView(selection: $index) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                    Group {
-                        if item.kind == .video {
+            Group {
+                // `TabView(.page)` is a `UIPageViewController` underneath --
+                // the heaviest thing in a feed card, and a lazy list builds
+                // one per visible post. Most posts carry a single photo and
+                // have nothing to page between, so they skip it entirely.
+                if items.count == 1, let only = items.first {
+                    // Sized by the picture's own aspect ratio, capped in
+                    // height and centred across the card -- the same shape
+                    // the web gallery uses. A fixed-height box left a
+                    // portrait photo pinned to the left edge of the card.
+                    page(for: only, isActive: isVisible)
+                        .frame(maxWidth: .infinity, maxHeight: 420)
+                } else {
+                    TabView(selection: $index) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                             // Only the page being looked at, in a card that
                             // is actually on screen, gets a player.
-                            VideoSurface(url: APIClient.mediaURL(item.url),
-                                         isActive: isVisible && i == index)
-                        } else {
-                            RetryingImage(url: APIClient.mediaURL(item.url))
+                            page(for: item, isActive: isVisible && i == index)
+                                .tag(i)
                         }
                     }
-                    .tag(i)
+                    .tabViewStyle(.page)
+                    // A pager cannot size itself to whichever page is
+                    // showing, so a multi-item carousel keeps a fixed box.
+                    .frame(height: 340)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: items.count > 1 ? .automatic : .never))
-            .frame(height: 300)
+            .frame(maxWidth: .infinity)
             .background(Theme.navy950)
             .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    @ViewBuilder
+    private func page(for item: MediaItem, isActive: Bool) -> some View {
+        if item.kind == .video {
+            // VideoSurface fills whatever it is given, so a lone video needs
+            // a shape of its own; a photo brings one.
+            VideoSurface(url: APIClient.mediaURL(item.url), isActive: isActive)
+                .aspectRatio(items.count == 1 ? 16.0 / 9.0 : nil, contentMode: .fit)
+        } else {
+            RetryingImage(url: APIClient.mediaURL(item.url))
         }
     }
 }

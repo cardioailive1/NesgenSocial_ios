@@ -1,24 +1,21 @@
 import Foundation
 
 @MainActor
-final class AdManagerViewModel: ObservableObject {
+final class AdManagerViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var ads: [Ad] = []
     @Published private(set) var pricing: AdPricing?
     @Published var errorMessage: String?
 
     func load() async {
-        do {
+        await attempt {
             pricing = try await AdsService.pricing()
             ads = try await AdsService.mine()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }
 
 @MainActor
-final class NewAdViewModel: ObservableObject {
+final class NewAdViewModel: ObservableObject, LoadingViewModel {
     @Published var headline = ""
     @Published var bodyText = ""
     @Published var targetUrl = ""
@@ -61,7 +58,7 @@ final class NewAdViewModel: ObservableObject {
 }
 
 @MainActor
-final class AdInsightsViewModel: ObservableObject {
+final class AdInsightsViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var insights: AdInsights?
     @Published var topUp = "5000"
     @Published var errorMessage: String?
@@ -96,7 +93,7 @@ final class AdInsightsViewModel: ObservableObject {
 }
 
 @MainActor
-final class AudiencePlannerViewModel: ObservableObject {
+final class AudiencePlannerViewModel: ObservableObject, LoadingViewModel {
     @Published var minAge = ""
     @Published var maxAge = ""
     @Published var city = ""

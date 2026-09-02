@@ -6,6 +6,7 @@ import PhotosUI
 /// Below that, community talk: the SPORTS category of the normal post feed.
 struct SportsView: View {
     @StateObject private var model = SportsViewModel()
+    @State private var selectedPost: Post?
     @State private var selectedItems: [PhotosPickerItem] = []
 
     var body: some View {
@@ -47,12 +48,7 @@ struct SportsView: View {
                         .padding(.horizontal, 14)
                     }
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                            .padding(.horizontal, 14)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     if model.scores?.verified == false {
                         Text("This league's fixture id isn't verified against the provider, so an empty list may not mean the season is over.")
@@ -87,22 +83,20 @@ struct SportsView: View {
                     composer.padding(.horizontal, 14)
 
                     ForEach(model.posts) { post in
-                        NavigationLink {
-                            PostDetailView(post: post)
-                        } label: {
-                            PostCard(post: post) { await model.toggleLike(post) }
+                        PostCard(post: post, onOpen: { selectedPost = post }) {
+                            await model.toggleLike(post)
                         }
-                        .buttonStyle(.plain)
                         .padding(.horizontal, 14)
                     }
                 }
                 .padding(.vertical, 12)
             }
-            .refreshable {
+            .pullToRefresh {
                 await model.loadScores()
                 await model.loadPosts()
             }
         }
+        .navigationDestination(item: $selectedPost) { PostDetailView(post: $0) }
         .navigationTitle("Sports")
         .navigationBarTitleDisplayMode(.inline)
         .tint(Theme.cyan400)

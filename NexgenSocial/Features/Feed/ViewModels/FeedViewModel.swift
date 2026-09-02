@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class FeedViewModel: ObservableObject {
+final class FeedViewModel: ObservableObject, LoadingViewModel {
     @Published var posts: [Post] = []
     @Published var sponsored: [Ad] = []
     @Published var isLoading = false
@@ -10,11 +10,8 @@ final class FeedViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
-        do {
+        await attempt {
             posts = try await PostsService.feed()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
 
         // Ads failing is never worth blocking the feed over.

@@ -36,7 +36,7 @@ struct JobsView: View {
                 }
                 .padding(14)
             }
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
         .navigationTitle("Jobs")
         .navigationBarTitleDisplayMode(.inline)

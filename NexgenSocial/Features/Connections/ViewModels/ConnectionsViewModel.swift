@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class ConnectionsViewModel: ObservableObject {
+final class ConnectionsViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var accounts: [SocialAccount] = []
     @Published private(set) var working: String?
     @Published var namingProvider: String?
@@ -13,11 +13,8 @@ final class ConnectionsViewModel: ObservableObject {
     }
 
     func load() async {
-        do {
+        await attempt {
             accounts = try await SocialAccountsService.accounts()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

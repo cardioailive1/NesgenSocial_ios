@@ -85,12 +85,7 @@ struct ProfileSettingsView: View {
                             .foregroundStyle(Theme.danger)
                             .padding(.top, 2)
 
-                        if let errorMessage = session.errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.danger)
-                                .multilineTextAlignment(.center)
-                        }
+                        ErrorBanner(message: session.errorMessage)
                     }
                     .padding(14)
                 }
@@ -102,16 +97,20 @@ struct ProfileSettingsView: View {
                     Button("Done") { dismiss() }.foregroundStyle(Theme.cyan400)
                 }
             }
-            .confirmationDialog("Sign out?", isPresented: $showSignOutConfirm) {
-                Button("Sign out", role: .destructive) { Task { await session.signOut() } }
+            // Alerts rather than confirmation dialogs: an action sheet slides
+            // up from the bottom edge and reads as a share menu, which is the
+            // wrong weight for a decision that ends the session.
+            .alert("Sign out?", isPresented: $showSignOutConfirm) {
                 Button("Cancel", role: .cancel) {}
+                Button("Sign out", role: .destructive) { Task { await session.signOut() } }
+            } message: {
+                Text("You'll need to sign in again to use NexgenSocial.")
             }
-            .confirmationDialog("Delete your account?", isPresented: $showDeleteConfirm,
-                                titleVisibility: .visible) {
+            .alert("Delete your account?", isPresented: $showDeleteConfirm) {
+                Button("Cancel", role: .cancel) {}
                 Button("Delete account", role: .destructive) {
                     Task { if await session.deleteAccount() { dismiss() } }
                 }
-                Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Your posts, messages, and connections are removed permanently. This can't be undone.")
             }

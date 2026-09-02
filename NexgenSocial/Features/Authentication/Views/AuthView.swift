@@ -63,12 +63,7 @@ struct SignInForm: View {
                 .textContentType(.password)
                 .fieldStyle()
 
-            if let error = session.errorMessage {
-                Text(error)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.danger)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            ErrorBanner(message: session.errorMessage)
 
             Button {
                 busy = true
@@ -132,11 +127,7 @@ struct ForgotPasswordView: View {
                             .autocorrectionDisabled()
                             .fieldStyle()
 
-                        if let errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.danger)
-                        }
+                        ErrorBanner(message: errorMessage)
 
                         Button {
                             Task { await send() }
@@ -231,12 +222,7 @@ struct SignUpForm: View {
             .foregroundStyle(Theme.cyan300)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let error = session.errorMessage {
-                Text(error)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.danger)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            ErrorBanner(message: session.errorMessage)
 
             Button {
                 busy = true

@@ -28,11 +28,7 @@ struct PremiumView: View {
                     .padding(16)
                     .card()
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     Button(isPremium ? "Switch back to Free" : "Upgrade to Premium") {
                         Task { await model.toggleTier() }

@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class PeopleViewModel: ObservableObject {
+final class PeopleViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var people: [User] = []
     @Published private(set) var suggestions: [FriendSuggestion] = []
     @Published private(set) var busyId: String?
@@ -18,11 +18,8 @@ final class PeopleViewModel: ObservableObject {
     }
 
     func load() async {
-        do {
+        await attempt {
             people = try await DiscoveryService.people(matching: searchText.trimmingCharacters(in: .whitespaces))
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
         // Suggestions are a nice-to-have: losing them shouldn't replace a more
         // useful error or produce one of their own.

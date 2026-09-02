@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class PlacesViewModel: ObservableObject {
+final class PlacesViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var places: [VisitedPlace] = []
     @Published private(set) var results: [GeocodeResult] = []
     @Published private(set) var isSearching = false
@@ -10,11 +10,8 @@ final class PlacesViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     func load() async {
-        do {
+        await attempt {
             places = try await ProfileService.places()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 
@@ -46,7 +43,7 @@ final class PlacesViewModel: ObservableObject {
 }
 
 @MainActor
-final class AddPlaceViewModel: ObservableObject {
+final class AddPlaceViewModel: ObservableObject, LoadingViewModel {
     @Published var note = ""
     @Published var isPublic = false
     @Published var visitedAt = Date()

@@ -9,9 +9,13 @@ enum MessagesService {
             .get(APIEndpoints.Messages.root, as: ConversationsResponse.self).conversations
     }
 
+    /// Polled every 5 seconds while a conversation is open, so it is never
+    /// served from the cache -- that is the one place stale content would be
+    /// plainly wrong. The conversation *list* above is cached normally.
     static func messages(in conversationId: String) async throws -> [Message] {
         try await APIClient.shared
-            .get(APIEndpoints.Messages.messages(in: conversationId), as: MessagesResponse.self).messages
+            .get(APIEndpoints.Messages.messages(in: conversationId),
+                 as: MessagesResponse.self, maxAge: 0).messages
     }
 
     static func send(_ body: String,

@@ -3,7 +3,7 @@ import SwiftUI
 import PhotosUI
 
 @MainActor
-final class MarketplaceViewModel: ObservableObject {
+final class MarketplaceViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var listings: [MarketListing] = []
     @Published var searchText = ""
     @Published private(set) var isPublishing = false
@@ -18,11 +18,8 @@ final class MarketplaceViewModel: ObservableObject {
     @Published var attachments: [PickedAttachment] = []
 
     func load() async {
-        do {
+        await attempt {
             listings = try await MarketplaceService.listings(matching: searchText.trimmingCharacters(in: .whitespaces))
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

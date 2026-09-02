@@ -37,7 +37,12 @@ final class ConversationViewModel: ObservableObject {
 
     func load() async {
         do {
-            messages = try await MessagesService.messages(in: conversation.id)
+            let fetched = try await MessagesService.messages(in: conversation.id)
+            // Reassigning an identical array re-diffs the whole thread, which
+            // is a visible hitch every 5 seconds while someone is reading a
+            // long conversation. Most polls return exactly what is already
+            // on screen.
+            if fetched.map(\.id) != messages.map(\.id) { messages = fetched }
             errorMessage = nil
         } catch {
             // Keeps whatever is already on screen: a dropped poll shouldn't

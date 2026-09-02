@@ -15,11 +15,7 @@ struct PlacesView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     searchBar
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     if !model.results.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -160,11 +156,7 @@ struct AddPlaceView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.slate400)
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
                     Spacer()
                 }
                 .font(.system(size: 14))

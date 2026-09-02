@@ -36,8 +36,8 @@ struct DiscoverView: View {
 
                     Section {
                         DiscoverRow(title: "Breaking news", icon: "newspaper.fill") { NewsView() }
-                        DiscoverRow(title: "Newsrooms", icon: "building.columns.fill") {
-                            NewsroomsView()
+                        DiscoverRow(title: "Media coverage", icon: "building.columns.fill") {
+                            MediaCoverageView()
                         }
                         DiscoverRow(title: "Sports", icon: "sportscourt.fill") { SportsView() }
                         DiscoverRow(title: "Political", icon: "megaphone.fill") { PoliticalView() }

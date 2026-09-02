@@ -3,6 +3,7 @@ import SwiftUI
 struct FeedView: View {
     @StateObject private var model = FeedViewModel()
     @State private var showComposer = false
+    @State private var selectedPost: Post?
 
     var body: some View {
         NavigationStack {
@@ -11,27 +12,21 @@ struct FeedView: View {
 
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        if let error = model.errorMessage {
-                            Text(error)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.danger)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .card()
-                                .accessibilityIdentifier("error-banner")
-                        }
+                        ErrorBanner(message: model.errorMessage)
 
                         ForEach(model.sponsored) { ad in
                             SponsoredCard(ad: ad) { await model.trackAd($0, ad: ad) }
                         }
 
+                        // Not wrapped in a `NavigationLink`: that made the
+                        // whole card one button, so swiping between a post's
+                        // photos fought the link, tapping a photo navigated
+                        // away, and VoiceOver read the entire card as a
+                        // single control. The card decides what opens it.
                         ForEach(model.posts) { post in
-                            NavigationLink {
-                                PostDetailView(post: post)
-                            } label: {
-                                PostCard(post: post) { await model.toggleLike(post) }
+                            PostCard(post: post, onOpen: { selectedPost = post }) {
+                                await model.toggleLike(post)
                             }
-                            .buttonStyle(.plain)
                         }
 
                         if model.posts.isEmpty && !model.isLoading {
@@ -51,8 +46,9 @@ struct FeedView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                 }
-                .refreshable { await model.load() }
+                .pullToRefresh { await model.load() }
             }
+            .navigationDestination(item: $selectedPost) { PostDetailView(post: $0) }
             .navigationTitle("Feed")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

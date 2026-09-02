@@ -92,7 +92,7 @@ struct MessagesView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .refreshable { await model.load() }
+            .pullToRefresh { await model.load() }
         }
     }
 
@@ -125,7 +125,7 @@ struct MessagesView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .refreshable { await model.loadCalls() }
+            .pullToRefresh { await model.loadCalls() }
         }
     }
 

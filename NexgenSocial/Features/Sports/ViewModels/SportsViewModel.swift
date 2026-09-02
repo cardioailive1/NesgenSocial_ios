@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class SportsViewModel: ObservableObject {
+final class SportsViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var leagues: [SportsLeague] = []
     @Published private(set) var live: [SportsEvent] = []
     @Published private(set) var scores: SportsScoresResponse?
@@ -75,11 +75,8 @@ final class SportsViewModel: ObservableObject {
 
     func loadScores() async {
         guard !selectedLeague.isEmpty else { return }
-        do {
+        await attempt {
             scores = try await SportsService.scores(league: selectedLeague)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }

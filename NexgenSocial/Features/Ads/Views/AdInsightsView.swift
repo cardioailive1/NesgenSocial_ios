@@ -51,11 +51,7 @@ struct AdInsightsView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.slate400)
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
                 }
                 .padding(14)
             }

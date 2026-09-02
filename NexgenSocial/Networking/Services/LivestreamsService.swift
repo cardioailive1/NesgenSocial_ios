@@ -7,10 +7,14 @@ enum LivestreamsService {
             .get(APIEndpoints.Livestreams.root, as: LivestreamsResponse.self).streams
     }
 
-    static func start(title: String) async throws -> Livestream {
-        try await APIClient.shared.post(APIEndpoints.Livestreams.root,
-                                        body: ["title": title],
-                                        as: LivestreamResponse.self).stream
+    /// `newsroomId` broadcasts under a newsroom's name. The server only
+    /// honours it for a newsroom you own.
+    static func start(title: String, newsroomId: String? = nil) async throws -> Livestream {
+        var body: [String: Any] = ["title": title]
+        if let newsroomId { body["newsroomId"] = newsroomId }
+        return try await APIClient.shared.post(APIEndpoints.Livestreams.root,
+                                               body: body,
+                                               as: LivestreamResponse.self).stream
     }
 
     static func end(_ streamId: String) async throws {

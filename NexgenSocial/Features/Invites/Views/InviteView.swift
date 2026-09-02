@@ -72,11 +72,7 @@ struct InviteView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .card()
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     SectionHeader("Sent invites")
                     if model.invites.isEmpty {

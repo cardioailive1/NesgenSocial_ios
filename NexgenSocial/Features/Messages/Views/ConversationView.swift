@@ -5,6 +5,7 @@ struct ConversationView: View {
     @StateObject private var model: ConversationViewModel
     @EnvironmentObject private var callService: CallService
     @State private var selectedItems: [PhotosPickerItem] = []
+    @Environment(\.scenePhase) private var scenePhase
 
     init(conversation: Conversation) {
         _model = StateObject(wrappedValue: ConversationViewModel(conversation: conversation))
@@ -34,7 +35,13 @@ struct ConversationView: View {
         }
         .tint(Theme.cyan400)
         .task { await model.load() }
-        .task { await model.pollForNewMessages() }
+        // Keyed on the scene phase so the poll is cancelled when the app
+        // leaves the foreground: a backgrounded chat used to keep hitting the
+        // API every 5 seconds for as long as the process lived.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await model.pollForNewMessages()
+        }
     }
 
     private var messageList: some View {

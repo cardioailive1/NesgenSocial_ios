@@ -1,9 +1,12 @@
 import SwiftUI
+import WebRTC
 
 /// NexgenMeet: list your meetings, create one, or join with a code.
 struct MeetView: View {
     @StateObject private var model = MeetViewModel()
+    @ObservedObject private var session = MeetSession.shared
     @State private var showingCreate = false
+    @State private var createdMeeting: Meeting?
 
     var body: some View {
         ZStack {
@@ -21,12 +24,7 @@ struct MeetView: View {
                 }
                 .padding(12)
 
-                if let errorMessage = model.errorMessage {
-                    Text(errorMessage)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.danger)
-                        .padding(.horizontal, 12)
-                }
+                ErrorBanner(message: model.errorMessage)
 
                 if model.meetings.isEmpty && !model.isLoading {
                     Spacer()
@@ -41,15 +39,11 @@ struct MeetView: View {
                     Spacer()
                 } else {
                     List(model.meetings) { meeting in
-                        Button {
-                            model.activeMeeting = meeting
-                        } label: {
-                            MeetingRow(meeting: meeting)
-                        }
-                        .listRowBackground(Theme.navy900)
+                        MeetingRow(meeting: meeting) { session.open(meeting) }
+                            .listRowBackground(Theme.navy900)
                     }
                     .scrollContentBackground(.hidden)
-                    .refreshable { await model.load() }
+                    .pullToRefresh { await model.load() }
                 }
             }
         }
@@ -64,41 +58,56 @@ struct MeetView: View {
         .sheet(isPresented: $showingCreate) {
             NewMeetingView { created in
                 await model.load()
-                model.activeMeeting = created
+                createdMeeting = created
             }
         }
-        .fullScreenCover(item: $model.activeMeeting) { meeting in
-            MeetingRoomView(meeting: meeting)
+        // Sharing the link is the first thing you do with a new meeting, so
+        // it is offered before the room opens rather than hidden inside it.
+        .sheet(item: $createdMeeting) { meeting in
+            MeetingCreatedView(meeting: meeting) { session.open(meeting) }
         }
-
     }
-
 }
 
 struct MeetingRow: View {
     let meeting: Meeting
+    let onOpen: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(meeting.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                HStack(spacing: 6) {
+                    Text(meeting.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                    if meeting.isHost == true {
+                        Text("HOST")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Theme.cyan400)
+                    }
+                    if meeting.isLive {
+                        Text("LIVE")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Theme.navy950)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Theme.danger)
+                            .clipShape(Capsule())
+                    }
+                }
                 Text(subtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.slate400)
             }
-            Spacer()
-            if meeting.isLive {
-                Text("LIVE")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.navy950)
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Theme.danger)
-                    .clipShape(Capsule())
-            }
+            Spacer(minLength: 8)
+            MeetingShareButtons(meeting: meeting)
+            Button(meeting.isLive ? "Join" : "Open", action: onOpen)
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.cyan400)
+                .foregroundStyle(Theme.navy950)
+                .font(.system(size: 12, weight: .semibold))
         }
         .padding(.vertical, 4)
+        .buttonStyle(.plain)
     }
 
     private var subtitle: String {
@@ -107,6 +116,124 @@ struct MeetingRow: View {
         if let code = meeting.code { parts.append(code) }
         if let count = meeting.participantCount { parts.append("\(count) in room") }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Copy and share, side by side. Both hand over the same thing the web app
+/// puts in the address bar, so a link opened anywhere lands in the meeting.
+struct MeetingShareButtons: View {
+    let meeting: Meeting
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                UIPasteboard.general.string = meeting.shareURL?.absoluteString ?? meeting.code
+                copied = true
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    copied = false
+                }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 14))
+                    .foregroundStyle(copied ? Theme.cyan400 : Theme.slate400)
+            }
+            .accessibilityLabel(copied ? "Link copied" : "Copy meeting link")
+
+            if let url = meeting.shareURL {
+                ShareLink(item: url, message: Text(meeting.shareText)) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.slate400)
+                }
+                .accessibilityLabel("Share meeting link")
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Shown once, right after a meeting is created: the code, the link, and the
+/// two things you want to do with them before anyone can join.
+struct MeetingCreatedView: View {
+    let meeting: Meeting
+    let onOpen: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+                VStack(spacing: 16) {
+                    Text(meeting.title)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    if let code = meeting.code {
+                        VStack(spacing: 4) {
+                            Text("MEETING CODE")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Theme.slate400)
+                            Text(code)
+                                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Theme.cyan400)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    if let url = meeting.shareURL {
+                        Text(url.absoluteString)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.slate400)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+
+                    HStack(spacing: 12) {
+                        Button {
+                            UIPasteboard.general.string = meeting.shareURL?.absoluteString ?? meeting.code
+                            copied = true
+                        } label: {
+                            Label(copied ? "Copied" : "Copy link", systemImage: copied ? "checkmark" : "doc.on.doc")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        if let url = meeting.shareURL {
+                            ShareLink(item: url, message: Text(meeting.shareText)) {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+
+                    Button("Start meeting") {
+                        dismiss()
+                        onOpen()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.cyan400)
+                    .foregroundStyle(Theme.navy950)
+
+                    Spacer()
+                }
+                .padding(20)
+                .tint(Theme.cyan400)
+            }
+            .navigationTitle("Meeting ready")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Later") { dismiss() }.tint(Theme.slate400)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 
@@ -120,23 +247,72 @@ struct NewMeetingView: View {
         NavigationStack {
             ZStack {
                 Theme.navy950.ignoresSafeArea()
-                VStack(alignment: .leading, spacing: 14) {
-                    TextField("Meeting title", text: $model.title).fieldStyle()
-                    Toggle("Waiting room", isOn: $model.waitingRoomEnabled)
-                    Toggle("Mute on entry", isOn: $model.muteOnEntry)
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
+                Form {
+                    Section {
+                        TextField("Meeting title", text: $model.title)
+                        TextField("What's it about? (optional)", text: $model.details, axis: .vertical)
+                            .lineLimit(2...4)
                     }
-                    Spacer()
+                    .listRowBackground(Theme.navy900)
+
+                    Section {
+                        Toggle("Schedule for later", isOn: $model.scheduleIt)
+                        if model.scheduleIt {
+                            DatePicker("Starts", selection: $model.scheduledFor)
+                        }
+                    } footer: {
+                        Text("Leave off to start the meeting now.")
+                    }
+                    .listRowBackground(Theme.navy900)
+
+                    Section("Host controls") {
+                        Toggle("Waiting room", isOn: $model.waitingRoomEnabled)
+                        Toggle("Mute on entry", isOn: $model.muteOnEntry)
+                        Toggle("Allow screen share", isOn: $model.allowParticipantScreenShare)
+                        Toggle("Allow chat", isOn: $model.allowChat)
+                    }
+                    .listRowBackground(Theme.navy900)
+
+                    if !model.friends.isEmpty {
+                        Section("Invite friends") {
+                            ForEach(model.friends) { friend in
+                                InviteRow(name: friend.displayName,
+                                          avatar: friend.avatarUrl,
+                                          seed: friend.username,
+                                          selected: model.inviteUserIds.contains(friend.id)) {
+                                    model.toggleFriend(friend.id)
+                                }
+                            }
+                        }
+                        .listRowBackground(Theme.navy900)
+                    }
+
+                    if !model.groups.isEmpty {
+                        Section("Invite groups") {
+                            ForEach(model.groups) { group in
+                                InviteRow(name: group.name,
+                                          avatar: nil,
+                                          seed: group.name,
+                                          selected: model.inviteGroupIds.contains(group.id)) {
+                                    model.toggleGroup(group.id)
+                                }
+                            }
+                        }
+                        .listRowBackground(Theme.navy900)
+                    }
+
+                    if model.errorMessage != nil {
+                        ErrorBanner(message: model.errorMessage)
+                            .listRowBackground(Color.clear)
+                    }
                 }
+                .scrollContentBackground(.hidden)
                 .tint(Theme.cyan400)
                 .foregroundStyle(.white)
-                .padding(16)
             }
             .navigationTitle("New meeting")
             .navigationBarTitleDisplayMode(.inline)
+            .task { await model.loadInvitees() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }.tint(Theme.slate400)
@@ -157,103 +333,24 @@ struct NewMeetingView: View {
     }
 }
 
-/// In-meeting UI. Media rides the same mediasoup SFU as one-to-one calls,
-/// on the `meet-<id>` room.
-// ponytail: renders one remote track because WebRTCManager keeps a single
-// `remoteVideoTrack`. Fine for two people; for a real grid, change the
-// manager to hold [peerId: RTCVideoTrack] and lay them out here.
-struct MeetingRoomView: View {
-    let meeting: Meeting
-    @ObservedObject private var webRTC = WebRTCManager.shared
-    @StateObject private var model: MeetingRoomViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    init(meeting: Meeting) {
-        self.meeting = meeting
-        _model = StateObject(wrappedValue: MeetingRoomViewModel(meeting: meeting))
-    }
+struct InviteRow: View {
+    let name: String
+    let avatar: String?
+    let seed: String
+    let selected: Bool
+    let action: () -> Void
 
     var body: some View {
-        ZStack {
-            Theme.navy950.ignoresSafeArea()
-
-            if let remote = webRTC.remoteVideoTrack {
-                VideoTrackView(track: remote).ignoresSafeArea()
-            }
-
-            VStack(spacing: 18) {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                AvatarView(url: avatar, seed: seed, size: 28)
+                Text(name)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white)
                 Spacer()
-
-                if webRTC.remoteVideoTrack == nil {
-                    Text(meeting.title)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text(statusText)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.slate400)
-                }
-
-                if let errorMessage = model.errorMessage {
-                    Text(errorMessage)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.danger)
-                }
-
-                // Joining the room can succeed while media fails; without
-                // this the screen just sits on "Connecting…" forever.
-                if let problem = webRTC.lastError {
-                    MediaErrorNotice(message: problem)
-                }
-
-                Spacer()
-
-                HStack(spacing: 26) {
-                    CallButton(icon: model.isMuted ? "mic.slash.fill" : "mic.fill",
-                               label: model.isMuted ? "Unmute" : "Mute",
-                               background: Theme.navy800) {
-                        model.isMuted.toggle()
-                        webRTC.setMuted(model.isMuted)
-                    }
-                    CallButton(icon: model.isCameraOff ? "video.slash.fill" : "video.fill",
-                               label: model.isCameraOff ? "Camera on" : "Camera off",
-                               background: Theme.navy800) {
-                        model.isCameraOff.toggle()
-                        webRTC.setCameraEnabled(!model.isCameraOff)
-                    }
-                    CallButton(icon: "phone.down.fill",
-                               label: meeting.isHost == true ? "End" : "Leave",
-                               background: Theme.danger) {
-                        Task { await model.leave(); dismiss() }
-                    }
-                }
-                .padding(.bottom, 50)
-            }
-
-            if let local = webRTC.localVideoTrack, !model.isCameraOff {
-                VStack {
-                    HStack {
-                        Spacer()
-                        VideoTrackView(track: local)
-                            .frame(width: 104, height: 156)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(Theme.line, lineWidth: 1)
-                            )
-                            .padding(.trailing, 16)
-                    }
-                    Spacer()
-                }
-                .padding(.top, 16)
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Theme.cyan400 : Theme.slate400)
             }
         }
-        .task { await model.join() }
-        .onDisappear { webRTC.disconnect() }
     }
-
-    private var statusText: String {
-        if model.isWaiting { return "Waiting for the host to let you in…" }
-        return webRTC.isConnected ? "Connected" : "Connecting…"
-    }
-
 }

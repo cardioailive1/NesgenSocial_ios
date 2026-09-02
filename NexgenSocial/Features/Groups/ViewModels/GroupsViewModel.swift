@@ -3,27 +3,26 @@ import SwiftUI
 import PhotosUI
 
 @MainActor
-final class GroupsViewModel: ObservableObject {
+final class GroupsViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var discover: [SocialGroup] = []
     @Published private(set) var mine: [SocialGroup] = []
     @Published var errorMessage: String?
 
     func load() async {
-        async let all = GroupsService.all()
-        async let joined = GroupsService.mine()
-        do {
+        // `async let` can't cross a closure boundary, so the pair is started
+        // inside `attempt` rather than around it.
+        await attempt {
+            async let all = GroupsService.all()
+            async let joined = GroupsService.mine()
             mine = try await joined
             let mineIds = Set(mine.map(\.id))
             discover = try await all.filter { !mineIds.contains($0.id) }
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }
 
 @MainActor
-final class GroupDetailViewModel: ObservableObject {
+final class GroupDetailViewModel: ObservableObject, LoadingViewModel {
     @Published private(set) var posts: [Post] = []
     @Published private(set) var members: [GroupMember] = []
     @Published private(set) var isMember = false
@@ -41,14 +40,11 @@ final class GroupDetailViewModel: ObservableObject {
     }
 
     func load() async {
-        async let loadedPosts = GroupsService.posts(in: group.id)
-        async let loadedMembers = GroupsService.members(of: group.id)
-        do {
+        await attempt { [group] in
+            async let loadedPosts = GroupsService.posts(in: group.id)
+            async let loadedMembers = GroupsService.members(of: group.id)
             posts = try await loadedPosts
             members = try await loadedMembers
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

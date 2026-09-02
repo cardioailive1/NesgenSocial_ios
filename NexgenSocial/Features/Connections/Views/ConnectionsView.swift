@@ -29,11 +29,7 @@ struct ConnectionsView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.slate400)
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.danger)
-                    }
+                    ErrorBanner(message: model.errorMessage)
 
                     ForEach(providers, id: \.0) { provider, label in
                         row(provider: provider, label: label)

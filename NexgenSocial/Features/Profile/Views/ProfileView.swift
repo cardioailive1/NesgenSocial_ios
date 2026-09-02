@@ -12,6 +12,7 @@ struct ProfileView: View {
 
     @State private var showSettings = false
     @State private var avatarItem: PhotosPickerItem?
+    @State private var selectedPost: Post?
 
     private var user: User? { session.currentUser }
 
@@ -27,8 +28,9 @@ struct ProfileView: View {
                     }
                     .padding(.bottom, 24)
                 }
-                .refreshable { await model.load(username: user?.username ?? "") }
+                .pullToRefresh { await model.load(username: user?.username ?? "") }
             }
+            .navigationDestination(item: $selectedPost) { PostDetailView(post: $0) }
             .navigationTitle(user?.username ?? "Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -115,11 +117,8 @@ struct ProfileView: View {
         } else {
             LazyVStack(spacing: 12) {
                 ForEach(model.posts) { post in
-                    NavigationLink { PostDetailView(post: post) } label: {
-                        PostCard(post: post, onLike: {})
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 14)
+                    PostCard(post: post, onOpen: { selectedPost = post }, onLike: {})
+                        .padding(.horizontal, 14)
                 }
             }
         }
