@@ -143,6 +143,7 @@ enum APIEndpoints {
 
     enum Livestreams {
         static let root = "/api/livestreams"
+        static func detail(_ id: String) -> String { "/api/livestreams/\(id)" }
         static func end(_ id: String) -> String { "/api/livestreams/\(id)/end" }
     }
 

@@ -2,8 +2,16 @@ import SwiftUI
 
 /// A single post with its comments and crowd-sourced context notes.
 struct PostDetailView: View {
+    @EnvironmentObject private var session: AuthSession
     @StateObject private var model: PostDetailViewModel
     @State private var showingNoteComposer = false
+    @State private var showingEditor = false
+    @State private var showingHistory = false
+
+    /// Only the author can edit, which is also what the server enforces.
+    private var isMine: Bool {
+        model.post.author?.id != nil && model.post.author?.id == session.currentUser?.id
+    }
 
     init(post: Post) {
         _model = StateObject(wrappedValue: PostDetailViewModel(post: post))
@@ -69,14 +77,36 @@ struct PostDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Add context") { showingNoteComposer = true }
-                    .font(.system(size: 13))
+                Menu {
+                    Button("Add context") { showingNoteComposer = true }
+                    if isMine {
+                        Button("Edit post") {
+                            model.editDraft = model.post.body ?? ""
+                            showingEditor = true
+                        }
+                    }
+                    if model.post.editedAt != nil {
+                        Button("Edit history") { showingHistory = true }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
             }
         }
         .tint(Theme.cyan400)
         .sheet(isPresented: $showingNoteComposer) {
             ContextNoteComposer(text: $model.noteDraft) {
                 await model.addContextNote()
+            }
+        }
+        .sheet(isPresented: $showingEditor) {
+            PostEditor(text: $model.editDraft, original: model.post.body ?? "") {
+                await model.saveEdit()
+            }
+        }
+        .sheet(isPresented: $showingHistory) {
+            PostHistoryView(revisions: model.revisions, current: model.post.body ?? "") {
+                await model.loadHistory()
             }
         }
         .task { await model.load() }
@@ -180,5 +210,127 @@ struct ContextNoteComposer: View {
                 }
             }
         }
+    }
+}
+
+
+/// Editing is body-only: the server's PATCH takes nothing else, and media on
+/// an existing post can't be changed.
+struct PostEditor: View {
+    @Binding var text: String
+    let original: String
+    let onSave: () async -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var busy = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 12) {
+                    TextField("What's on your mind?", text: $text, axis: .vertical)
+                        .lineLimit(4...12)
+                        .fieldStyle()
+                    Text("The earlier version is kept, and the post is marked as edited.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.slate400)
+                    Spacer()
+                }
+                .padding(18)
+            }
+            .navigationTitle("Edit post")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(Theme.cyan400)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { text = original; dismiss() }.tint(Theme.slate400)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(busy ? "Saving…" : "Save") {
+                        busy = true
+                        Task {
+                            if await onSave() { dismiss() }
+                            busy = false
+                        }
+                    }
+                    .disabled(busy
+                              || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || text == original)
+                }
+            }
+        }
+    }
+}
+
+/// Oldest first, matching the server's order, with the live body last so the
+/// list reads as a sequence rather than needing the post behind it.
+struct PostHistoryView: View {
+    let revisions: [PostRevision]?
+    let current: String
+    let onLoad: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let revisions {
+                            ForEach(Array(revisions.enumerated()), id: \.element.id) { index, revision in
+                                RevisionCard(label: "Version \(index + 1)",
+                                             timestamp: revision.editedAt,
+                                             text: revision.body)
+                            }
+                            RevisionCard(label: "Now", timestamp: nil, text: current)
+                            if revisions.isEmpty {
+                                Text("No earlier versions were recorded.")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.slate400)
+                            }
+                        } else {
+                            ProgressView().tint(Theme.cyan400)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Edit history")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(Theme.cyan400)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }.tint(Theme.slate400)
+                }
+            }
+            .task { if revisions == nil { await onLoad() } }
+        }
+    }
+}
+
+private struct RevisionCard: View {
+    let label: String
+    let timestamp: String?
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(label)
+                if let stamp = ServerDate.listTime(timestamp) { Text("· \(stamp)") }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.slate400)
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.slate300)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .card()
     }
 }

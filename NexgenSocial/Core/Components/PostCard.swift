@@ -17,9 +17,12 @@ struct PostCard: View {
                         Text(post.author?.displayName ?? "Unknown")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                        Text("@\(post.author?.username ?? "")")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.slate400)
+                        HStack(spacing: 4) {
+                            Text("@\(post.author?.username ?? "")")
+                            if post.editedAt != nil { Text("· edited") }
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.slate400)
                     }
                     Spacer()
                 }

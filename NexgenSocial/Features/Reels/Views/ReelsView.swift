@@ -28,7 +28,10 @@ struct ReelsView: View {
                         Text(model.errorMessage == nil ? "No reels yet" : "Couldn't load reels")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
-                        Text(model.errorMessage ?? "Record the first one — reels reach people who don't follow you yet.")
+                        Text(model.errorMessage
+                             ?? (model.activeTag.isEmpty
+                                 ? "Record the first one — reels reach people who don't follow you yet."
+                                 : "Nothing tagged #\(model.activeTag) yet."))
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.slate400)
                             .multilineTextAlignment(.center)
@@ -73,10 +76,41 @@ struct ReelsView: View {
                 }
             }
         }
+        .overlay(alignment: .top) { tagRail }
         .ignoresSafeArea()
         .task { await model.load() }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
+    }
+
+    /// Tag filter over the ranked feed. Sits over the video rather than above
+    /// it: the cells are full-bleed and a header would cost a slice of every
+    /// reel.
+    @ViewBuilder
+    private var tagRail: some View {
+        if !model.trending.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    TagChip(title: "For you", isActive: model.activeTag.isEmpty) {
+                        Task { await model.select(tag: "") }
+                    }
+                    ForEach(model.trending) { tag in
+                        TagChip(title: "#\(tag.tag)",
+                                count: tag.reelCount,
+                                isActive: model.activeTag == tag.tag) {
+                            Task { await model.select(tag: tag.tag) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+            .padding(.top, 6)
+            .background(
+                LinearGradient(colors: [.black.opacity(0.55), .clear],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea(edges: .top)
+            )
+        }
     }
 
     /// Warms the reel after the current one, and the one before it, so a swipe
@@ -282,5 +316,29 @@ enum ReelPrefetcher {
         guard let url, assets[url] == nil else { return }
         let asset = asset(for: url)
         Task.detached(priority: .utility) { _ = try? await asset.load(.isPlayable) }
+    }
+}
+
+private struct TagChip: View {
+    let title: String
+    var count: Int?
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                if let count {
+                    Text("\(count)").opacity(0.6)
+                }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(isActive ? Theme.navy950 : Theme.slate300)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isActive ? Theme.cyan400 : Color.black.opacity(0.45))
+            .clipShape(Capsule())
+        }
     }
 }

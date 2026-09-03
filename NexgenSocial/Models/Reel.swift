@@ -17,3 +17,13 @@ struct Reel: Codable, Identifiable {
 }
 
 struct ReelsResponse: Codable { let reels: [Reel] }
+struct ReelResponse: Codable { let reel: Reel }
+
+struct TrendingHashtag: Codable, Identifiable {
+    let tag: String
+    var reelCount: Int?
+
+    var id: String { tag }
+}
+
+struct TrendingHashtagsResponse: Codable { let trending: [TrendingHashtag] }

@@ -96,6 +96,7 @@ struct LivestreamRoomView: View {
     @ObservedObject private var webRTC = WebRTCManager.shared
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var session: AuthSession
+    @State private var hostEnded = false
 
     private var isHost: Bool { stream.host?.id == session.currentUser?.id }
 
@@ -127,6 +128,11 @@ struct LivestreamRoomView: View {
                 if let problem = webRTC.lastError {
                     MediaErrorNotice(message: problem)
                     Spacer()
+                } else if hostEnded {
+                    Text("This stream has ended.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.slate400)
+                    Spacer()
                 } else if webRTC.remoteVideoTrack == nil && !isHost {
                     Text("Connecting to the stream…")
                         .font(.system(size: 13))
@@ -136,7 +142,24 @@ struct LivestreamRoomView: View {
             }
         }
         .task { await webRTC.connectToLivestream(streamId: stream.id, asHost: isHost) }
+        // A viewer gets no signal when the host ends: the SFU room just goes
+        // quiet. The list only returns LIVE streams, so ask for this one.
+        .task { await watchForEnd() }
         .onDisappear { webRTC.disconnect() }
+    }
+
+    private func watchForEnd() async {
+        guard !isHost else { return }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            guard let live = try? await LivestreamsService.detail(stream.id) else { continue }
+            if live.status != "LIVE" {
+                hostEnded = true
+                webRTC.disconnect()
+                return
+            }
+        }
     }
 
     private func leave() async {
@@ -150,5 +173,51 @@ struct LivestreamRoomView: View {
         }
         await onEnded()
         dismiss()
+    }
+}
+
+/// Starting a stream from the Create sheet: title, start, then straight into
+/// the room. The Live tab keeps its own inline alert for the same thing.
+struct StartLiveView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var model = LivestreamsViewModel()
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+                Form {
+                    Section {
+                        TextField("What are you streaming?", text: $model.newTitle)
+                    }
+                    .listRowBackground(Theme.navy900)
+
+                    if let error = model.errorMessage {
+                        Text(error)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.danger)
+                            .listRowBackground(Theme.navy900)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Go live")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Start") { Task { await model.start() } }
+                        .disabled(model.newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .tint(Theme.cyan400)
+        }
+        .fullScreenCover(item: $model.watching) { stream in
+            LivestreamRoomView(stream: stream,
+                               onEnded: { dismiss() },
+                               onEndFailed: { model.errorMessage = $0 })
+        }
     }
 }

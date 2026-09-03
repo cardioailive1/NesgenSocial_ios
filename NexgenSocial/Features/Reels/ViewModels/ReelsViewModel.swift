@@ -3,6 +3,10 @@ import Foundation
 @MainActor
 final class ReelsViewModel: ObservableObject, LoadingViewModel {
     @Published var reels: [Reel] = []
+    @Published private(set) var trending: [TrendingHashtag] = []
+    /// Empty means the ranked "For you" feed, which is what the server
+    /// returns when no hashtag is sent.
+    @Published private(set) var activeTag = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -10,8 +14,20 @@ final class ReelsViewModel: ObservableObject, LoadingViewModel {
         isLoading = true
         defer { isLoading = false }
         await attempt {
-            reels = try await ReelsService.discover()
+            reels = try await ReelsService.discover(hashtag: activeTag)
         }
+        // A missing tag rail is worth less than a broken screen, so this
+        // failing never surfaces as an error.
+        if trending.isEmpty {
+            trending = (try? await ReelsService.trendingHashtags()) ?? []
+        }
+    }
+
+    func select(tag: String) async {
+        guard tag != activeTag else { return }
+        activeTag = tag
+        reels = []
+        await load()
     }
 
     /// Analytics only: a dropped view report is not worth telling anyone about.

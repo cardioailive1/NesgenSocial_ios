@@ -90,14 +90,15 @@ struct SignInForm: View {
     }
 }
 
-/// Requests the reset email. Choosing the new password happens on the web
-/// page the emailed link opens — the token lives in that link, so there is
-/// nothing for the app to do in between.
+/// Requests the reset email, then finishes the reset in the app: the token
+/// lives in the emailed link, so pasting that link is enough — no round trip
+/// through the browser.
 struct ForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var email = ""
     @State private var busy = false
     @State private var sent = false
+    @State private var showReset = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -113,8 +114,18 @@ struct ForgotPasswordView: View {
                         Text("Nothing arrived? Check your spam folder, and make sure you used the address you signed up with. Delivery can take a couple of minutes.")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.slate400)
-                        Button("Back to sign in") { dismiss() }
+
+                        Divider().overlay(Theme.slate400.opacity(0.3))
+
+                        Text("Got the email? Copy the link and paste it here to set your new password without leaving the app.")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.slate300)
+                        Button("Paste reset link") { showReset = true }
                             .buttonStyle(PrimaryButtonStyle())
+
+                        Button("Back to sign in") { dismiss() }
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.cyan300)
                     } else {
                         Text("Enter the email address on your account and we'll send you a link to set a new password.")
                             .font(.system(size: 13))
@@ -149,6 +160,9 @@ struct ForgotPasswordView: View {
                     Button("Cancel") { dismiss() }.tint(Theme.slate400)
                 }
             }
+            .sheet(isPresented: $showReset) {
+                ChooseNewPasswordView { dismiss() }
+            }
         }
     }
 
@@ -159,6 +173,133 @@ struct ForgotPasswordView: View {
             try await AuthService.forgotPassword(email: email.trimmingCharacters(in: .whitespaces))
             errorMessage = nil
             sent = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// Second half of the reset: paste the emailed link, then choose the password.
+/// The token is checked before the form appears so an expired link says so
+/// straight away.
+struct ChooseNewPasswordView: View {
+    /// Called after a successful change, to close the forgot-password sheet too.
+    let onFinished: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var pasted = ""
+    @State private var token: String?
+    @State private var password = ""
+    @State private var confirm = ""
+    @State private var busy = false
+    @State private var done = false
+    @State private var errorMessage: String?
+
+    private var passwordProblem: String? {
+        if password.count < 8 { return "Use at least 8 characters." }
+        if password != confirm { return "The two passwords don't match." }
+        return nil
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    if done {
+                        Text("Your password has been changed. Sign in with it.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.cyan300)
+                        Button("Back to sign in") { dismiss(); onFinished() }
+                            .buttonStyle(PrimaryButtonStyle())
+                    } else if let token {
+                        Text("Choose a new password.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.slate400)
+
+                        SecureField("New password (8+ characters)", text: $password)
+                            .textContentType(.newPassword)
+                            .fieldStyle()
+                        SecureField("Confirm new password", text: $confirm)
+                            .textContentType(.newPassword)
+                            .fieldStyle()
+
+                        if !confirm.isEmpty, let problem = passwordProblem {
+                            Text(problem)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.danger)
+                        }
+                        ErrorBanner(message: errorMessage)
+
+                        Button {
+                            Task { await save(token: token) }
+                        } label: {
+                            Text(busy ? "Saving…" : "Change password").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(busy || passwordProblem != nil)
+                    } else {
+                        Text("Paste the link from the reset email. It expires an hour after it was sent and works once.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.slate400)
+
+                        TextField("https://…/reset-password?token=…", text: $pasted, axis: .vertical)
+                            .textContentType(.URL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .lineLimit(1...3)
+                            .fieldStyle()
+
+                        ErrorBanner(message: errorMessage)
+
+                        Button {
+                            Task { await check() }
+                        } label: {
+                            Text(busy ? "Checking…" : "Continue").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(busy || AuthService.resetToken(in: pasted) == nil)
+                    }
+                    Spacer()
+                }
+                .padding(18)
+            }
+            .navigationTitle("New password")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(Theme.cyan400)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.tint(Theme.slate400)
+                }
+            }
+        }
+    }
+
+    private func check() async {
+        guard let candidate = AuthService.resetToken(in: pasted) else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            if try await AuthService.resetTokenIsValid(candidate) {
+                errorMessage = nil
+                token = candidate
+            } else {
+                errorMessage = "That link has expired or has already been used. Request a fresh one."
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func save(token: String) async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await AuthService.resetPassword(token: token, password: password)
+            errorMessage = nil
+            done = true
         } catch {
             errorMessage = error.localizedDescription
         }
