@@ -114,3 +114,47 @@ final class PoliticalPageViewModel: ObservableObject, LoadingViewModel {
         }
     }
 }
+
+@MainActor
+final class RunPoliticalAdViewModel: ObservableObject {
+    @Published var headline = ""
+    @Published var body = ""
+    @Published var paidForBy = ""
+    @Published var targetUrl = ""
+    @Published var spend = ""
+    @Published var region = ""
+    @Published var media: [PickedAttachment] = []
+    @Published private(set) var isSaving = false
+    @Published var errorMessage: String?
+
+    /// The server's own three requirements. "Paid for by" is a legal
+    /// disclosure, not a nicety, so it is required here as well.
+    var canSave: Bool {
+        [headline, body, paidForBy].allSatisfy {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    /// Typed in whole currency; the API stores cents.
+    private var spendCents: Int { Int((Double(spend) ?? 0) * 100) }
+
+    func save(pageId: String) async -> Bool {
+        guard canSave, !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            _ = try await PoliticalService.createAd(pageId: pageId,
+                                                    headline: headline,
+                                                    body: body,
+                                                    paidForBy: paidForBy,
+                                                    targetUrl: targetUrl,
+                                                    spendCents: spendCents,
+                                                    region: region,
+                                                    media: media.first)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+}

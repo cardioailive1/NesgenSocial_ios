@@ -45,6 +45,28 @@ enum PoliticalService {
                                               as: EmptyResponse.self)
     }
 
+    /// Runs an ad from a page you own. `paidForBy` is legally required and
+    /// the server rejects a blank one, so the form requires it too.
+    static func createAd(pageId: String,
+                         headline: String,
+                         body: String,
+                         paidForBy: String,
+                         targetUrl: String,
+                         spendCents: Int,
+                         region: String,
+                         media: PickedAttachment?) async throws -> PoliticalAd {
+        var fields = ["pageId": pageId, "headline": headline, "body": body,
+                      "paidForBy": paidForBy, "spendCents": String(spendCents)]
+        if !targetUrl.isEmpty { fields["targetUrl"] = targetUrl }
+        if !region.isEmpty { fields["region"] = region }
+        let files = media.map { [(name: "media", filename: $0.filename,
+                                  mimeType: $0.mimeType, data: $0.data)] } ?? []
+        return try await APIClient.shared.upload(APIEndpoints.Political.ads,
+                                                 fields: fields,
+                                                 files: files,
+                                                 as: PoliticalAdResponse.self).ad
+    }
+
     static func setFollowing(_ following: Bool, pageId: String) async throws {
         if following {
             _ = try await APIClient.shared.post(APIEndpoints.Political.follow(pageId),

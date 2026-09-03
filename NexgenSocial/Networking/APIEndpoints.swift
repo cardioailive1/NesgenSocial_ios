@@ -142,6 +142,7 @@ enum APIEndpoints {
         static func posts(_ id: String) -> String { "/api/political/pages/\(id)/posts" }
         static func follow(_ id: String) -> String { "/api/political/pages/\(id)/follow" }
         static let archive = "/api/political/archive"
+        static let ads = "/api/political/ads"
     }
 
     enum Livestreams {

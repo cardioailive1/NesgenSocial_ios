@@ -304,6 +304,7 @@ struct PoliticalPageView: View {
 
     @EnvironmentObject private var session: AuthSession
     @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var runningAd = false
     @StateObject private var model: PoliticalPageViewModel
 
     init(page: PoliticalPage) {
@@ -354,6 +355,11 @@ struct PoliticalPageView: View {
                     // would just be a 403 waiting to happen.
                     if page.owner?.username == session.currentUser?.username {
                         composer.padding(.horizontal, 14)
+
+                        Button("Run an ad from this page") { runningAd = true }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.cyan300)
+                            .padding(.horizontal, 14)
                     }
 
                     SectionHeader("Posts")
@@ -387,6 +393,9 @@ struct PoliticalPageView: View {
         .navigationTitle(page.name)
         .navigationBarTitleDisplayMode(.inline)
         .tint(Theme.cyan400)
+        .sheet(isPresented: $runningAd) {
+            RunPoliticalAdView(page: page)
+        }
         .task { await model.load() }
     }
 
@@ -415,6 +424,80 @@ struct PoliticalPageView: View {
             Task {
                 model.attachments += await AttachmentLoader.load(items)
                 selectedItems = []
+            }
+        }
+    }
+}
+
+
+/// Submitting a political ad to the archive, from a page you own. Every field
+/// the server requires is required here, "Paid for by" included: it is the
+/// disclosure the archive exists to preserve.
+struct RunPoliticalAdView: View {
+    let page: PoliticalPage
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var model = RunPoliticalAdViewModel()
+    @State private var pickedMedia: [PhotosPickerItem] = []
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("This ad is filed in the public archive under \(page.organization ?? page.name), and stays there after it stops running.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.slate400)
+
+                        TextField("Headline", text: $model.headline).fieldStyle()
+                        TextField("Ad text", text: $model.body, axis: .vertical)
+                            .lineLimit(3...8)
+                            .fieldStyle()
+                        TextField("Paid for by (required)", text: $model.paidForBy).fieldStyle()
+                        TextField("Link (optional)", text: $model.targetUrl)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .fieldStyle()
+                        TextField("Budget, e.g. 250", text: $model.spend)
+                            .keyboardType(.decimalPad)
+                            .fieldStyle()
+                        TextField("Region (optional)", text: $model.region).fieldStyle()
+
+                        AttachmentStrip(attachments: $model.media, thumbnailSize: 56)
+                        PhotosPicker(selection: $pickedMedia, maxSelectionCount: 1,
+                                     matching: .any(of: [.images, .videos])) {
+                            Text("Add an image or video")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.cyan300)
+                        }
+
+                        ErrorBanner(message: model.errorMessage)
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Run an ad")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(Theme.cyan400)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.tint(Theme.slate400)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.isSaving ? "Submitting…" : "Submit") {
+                        Task { if await model.save(pageId: page.id) { dismiss() } }
+                    }
+                    .disabled(model.isSaving || !model.canSave)
+                }
+            }
+            .onChange(of: pickedMedia) { _, items in
+                Task {
+                    model.media = await AttachmentLoader.load(items)
+                    pickedMedia = []
+                }
             }
         }
     }

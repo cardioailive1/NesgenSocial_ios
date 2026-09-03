@@ -48,6 +48,7 @@ struct PoliticalAd: Codable, Identifiable, Hashable {
 }
 
 struct PoliticalArchiveResponse: Codable { let ads: [PoliticalAd] }
+struct PoliticalAdResponse: Codable { let ad: PoliticalAd }
 struct PoliticalPageResponse: Codable { let page: PoliticalPage }
 struct PoliticalPagesResponse: Codable { let pages: [PoliticalPage] }
 struct PoliticalPostsResponse: Codable { let posts: [PoliticalPost] }
