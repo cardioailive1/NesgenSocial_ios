@@ -4,6 +4,7 @@ import Foundation
 final class FeedViewModel: ObservableObject, LoadingViewModel {
     @Published var posts: [Post] = []
     @Published var sponsored: [Ad] = []
+    @Published var weights = FeedWeights.default
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -11,11 +12,21 @@ final class FeedViewModel: ObservableObject, LoadingViewModel {
         isLoading = true
         defer { isLoading = false }
         await attempt {
-            posts = try await PostsService.feed()
+            let response = try await PostsService.feed()
+            posts = response.posts
+            if let served = response.feedWeights { weights = served }
         }
 
         // Ads failing is never worth blocking the feed over.
         sponsored = (try? await AdsService.serve()) ?? []
+    }
+
+    /// Save, then reload: the ranking only changes on the server's next pass.
+    func saveWeights() async {
+        await attempt {
+            weights = try await PostsService.setFeedWeights(weights)
+        }
+        await load()
     }
 
     func toggleLike(_ post: Post) async {

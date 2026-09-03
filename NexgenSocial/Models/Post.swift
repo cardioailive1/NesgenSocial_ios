@@ -7,6 +7,9 @@ struct Post: Codable, Identifiable {
     var mediaUrl: String?
     var media: [MediaItem]?
     var createdAt: String?
+    /// Present only once the post has been edited; the card shows an "edited"
+    /// marker and the detail screen offers the history when it is set.
+    var editedAt: String?
     var author: User?
     var likeCount: Int?
     var commentCount: Int?
@@ -44,6 +47,9 @@ struct Comment: Codable, Identifiable {
     let id: String
     let body: String
     var createdAt: String?
+    /// Present only once the post has been edited; the card shows an "edited"
+    /// marker and the detail screen offers the history when it is set.
+    var editedAt: String?
     var author: User?
 }
 
@@ -52,13 +58,42 @@ struct ContextNote: Codable, Identifiable {
     let id: String
     let body: String
     var createdAt: String?
+    /// Present only once the post has been edited; the card shows an "edited"
+    /// marker and the detail screen offers the history when it is set.
+    var editedAt: String?
     var author: User?
     var helpfulCount: Int?
     var notHelpfulCount: Int?
     var viewerVote: Int?
 }
 
-struct FeedResponse: Codable { let posts: [Post] }
+/// One earlier version of a post's body, kept by the server on every edit.
+struct PostRevision: Codable, Identifiable {
+    let id: String
+    let body: String
+    var editedAt: String?
+}
+
+/// How the server ranks the feed for this person. Every value is 0...1 and
+/// the server clamps anything outside that, so the sliders can't send junk.
+struct FeedWeights: Codable, Equatable {
+    var recency: Double
+    var engagement: Double
+    var diversity: Double
+
+    static let `default` = FeedWeights(recency: 0.5, engagement: 0.3, diversity: 0.2)
+}
+
+/// `feedWeights` rides along with the feed, so opening the tuning panel costs
+/// no extra request.
+struct FeedResponse: Codable {
+    let posts: [Post]
+    let feedWeights: FeedWeights?
+}
+
+struct FeedWeightsResponse: Codable { let feedWeights: FeedWeights }
+struct PostResponse: Codable { let post: Post }
+struct PostHistoryResponse: Codable { let revisions: [PostRevision] }
 struct CommentsResponse: Codable { let comments: [Comment] }
 struct CommentResponse: Codable { let comment: Comment }
 struct ContextNotesResponse: Codable { let notes: [ContextNote] }

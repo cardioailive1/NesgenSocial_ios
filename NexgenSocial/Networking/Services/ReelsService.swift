@@ -2,8 +2,35 @@ import Foundation
 
 enum ReelsService {
 
-    static func discover() async throws -> [Reel] {
-        try await APIClient.shared.get(APIEndpoints.Reels.discover, as: ReelsResponse.self).reels
+    static func discover(hashtag: String = "") async throws -> [Reel] {
+        try await APIClient.shared.get(APIEndpoints.Reels.discover(hashtag: hashtag),
+                                       as: ReelsResponse.self).reels
+    }
+
+    static func trendingHashtags() async throws -> [TrendingHashtag] {
+        try await APIClient.shared.get(APIEndpoints.Reels.trendingHashtags,
+                                       as: TrendingHashtagsResponse.self).trending
+    }
+
+    /// The server reads `video` and `thumbnail` as separate multipart fields,
+    /// not the shared `media` field posts use, so this can't reuse
+    /// `uploadFiles`.
+    static func create(caption: String,
+                       durationSec: Double,
+                       video: Data,
+                       thumbnail: Data?) async throws -> Reel {
+        var files: [(name: String, filename: String, mimeType: String, data: Data)] = [
+            (name: "video", filename: "reel-\(UUID().uuidString).mov", mimeType: "video/quicktime", data: video)
+        ]
+        if let thumbnail {
+            files.append((name: "thumbnail", filename: "thumb-\(UUID().uuidString).jpg",
+                          mimeType: "image/jpeg", data: thumbnail))
+        }
+        return try await APIClient.shared.upload(APIEndpoints.Reels.root,
+                                                 fields: ["caption": caption,
+                                                          "durationSec": String(format: "%.0f", durationSec)],
+                                                 files: files,
+                                                 as: ReelResponse.self).reel
     }
 
     static func setLiked(_ liked: Bool, reelId: String) async throws {

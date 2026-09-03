@@ -14,6 +14,8 @@ enum APIEndpoints {
         static let login    = "/api/auth/login"
         static let register = "/api/auth/register"
         static let forgotPassword = "/api/auth/forgot-password"
+        static let resetPassword  = "/api/auth/reset-password"
+        static func resetPasswordToken(_ token: String) -> String { "\(resetPassword)/\(token.urlQueryEscaped)" }
     }
 
     enum Profile {
@@ -32,6 +34,8 @@ enum APIEndpoints {
         static let root = "/api/posts"
         static let feed = "/api/posts/feed"
         static func explore(category: String) -> String { "/api/posts/explore?category=\(category.urlQueryEscaped)" }
+        static func detail(_ id: String) -> String { "/api/posts/\(id)" }
+        static func history(_ id: String) -> String { "/api/posts/\(id)/history" }
         static func like(_ id: String) -> String { "/api/posts/\(id)/like" }
         static func comments(_ id: String) -> String { "/api/posts/\(id)/comments" }
         static func notes(_ id: String) -> String { "/api/posts/\(id)/notes" }
@@ -40,7 +44,12 @@ enum APIEndpoints {
     }
 
     enum Reels {
-        static let discover = "/api/reels/discover"
+        static let root     = "/api/reels"
+        static let trendingHashtags = "/api/reels/hashtags/trending"
+        static func discover(hashtag: String) -> String {
+            hashtag.isEmpty ? "/api/reels/discover"
+                            : "/api/reels/discover?hashtag=\(hashtag.urlQueryEscaped)"
+        }
         static func like(_ id: String) -> String { "/api/reels/\(id)/like" }
         static func view(_ id: String) -> String { "/api/reels/\(id)/view" }
     }
@@ -78,6 +87,7 @@ enum APIEndpoints {
     enum Users {
         static let me     = "/api/users/me"
         static let avatar = "/api/users/me/avatar"
+        static let feedWeights = "/api/users/me/feed-weights"
         static func profile(_ username: String) -> String { "/api/users/\(username)" }
         static func search(_ query: String) -> String {
             query.isEmpty ? "/api/users" : "/api/users?q=\(query.urlQueryEscaped)"

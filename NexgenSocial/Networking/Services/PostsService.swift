@@ -3,8 +3,16 @@ import Foundation
 /// Posts: the feed, category browsing, likes, comments, and context notes.
 enum PostsService {
 
-    static func feed() async throws -> [Post] {
-        try await APIClient.shared.get(APIEndpoints.Posts.feed, as: FeedResponse.self).posts
+    static func feed() async throws -> FeedResponse {
+        try await APIClient.shared.get(APIEndpoints.Posts.feed, as: FeedResponse.self)
+    }
+
+    static func setFeedWeights(_ weights: FeedWeights) async throws -> FeedWeights {
+        try await APIClient.shared.patch(APIEndpoints.Users.feedWeights,
+                                         body: ["recency": weights.recency,
+                                                "engagement": weights.engagement,
+                                                "diversity": weights.diversity],
+                                         as: FeedWeightsResponse.self).feedWeights
     }
 
     static func explore(category: String) async throws -> [Post] {
@@ -31,6 +39,19 @@ enum PostsService {
                                               fields: fields,
                                               files: attachments.uploadFiles,
                                               as: EmptyResponse.self)
+    }
+
+    /// Server keeps the previous body as a revision and stamps `editedAt`, so
+    /// the updated post it returns is what the screen should show.
+    static func edit(_ postId: String, body: String) async throws -> Post {
+        try await APIClient.shared.patch(APIEndpoints.Posts.detail(postId),
+                                         body: ["body": body],
+                                         as: PostResponse.self).post
+    }
+
+    static func history(for postId: String) async throws -> [PostRevision] {
+        try await APIClient.shared.get(APIEndpoints.Posts.history(postId),
+                                       as: PostHistoryResponse.self).revisions
     }
 
     static func setLiked(_ liked: Bool, postId: String) async throws {

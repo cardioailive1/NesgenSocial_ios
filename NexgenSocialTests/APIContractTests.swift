@@ -32,7 +32,7 @@ final class APIContractTests: XCTestCase {
           "feedReason":"Public post","scoreBreakdown":{"recency":0.02,"engagement":0.263}}]}
         """)
 
-        let posts = try await PostsService.feed()
+        let posts = try await PostsService.feed().posts
         let post = try XCTUnwrap(posts.first)
         XCTAssertEqual(post.author?.displayName, "Some One")
         XCTAssertEqual(post.likeCount, 5)
