@@ -26,3 +26,22 @@ struct FriendsResponse: Codable {
 }
 
 struct SuggestionsResponse: Codable { let suggestions: [FriendSuggestion] }
+
+/// `GET /api/suggestions/profile-status`. `isComplete` is the server's own
+/// judgement: a photo, a bio and interests are enough, the rest is optional.
+struct ProfileStatus: Codable {
+    let completeness: Int
+    let missing: [ProfileGap]
+    let isComplete: Bool
+}
+
+struct ProfileGap: Codable, Identifiable {
+    let key: String
+    let label: String
+    /// A web route (`/profile-setup`, `/people`). Kept for parity of the
+    /// payload; iOS shows the label and hint instead of linking.
+    var action: String?
+    var hint: String?
+
+    var id: String { key }
+}

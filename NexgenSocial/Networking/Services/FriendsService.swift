@@ -17,6 +17,11 @@ enum FriendsService {
             .get(APIEndpoints.Friends.suggestions, as: SuggestionsResponse.self).suggestions
     }
 
+    /// How far along this account's profile is, and what is still missing.
+    static func profileStatus() async throws -> ProfileStatus {
+        try await APIClient.shared.get(APIEndpoints.Friends.profileStatus, as: ProfileStatus.self)
+    }
+
     static func sendRequest(to username: String) async throws {
         _ = try await APIClient.shared.post(APIEndpoints.Friends.requests,
                                             body: ["username": username],

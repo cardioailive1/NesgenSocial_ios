@@ -28,6 +28,8 @@ struct FeedView: View {
                     LazyVStack(spacing: 12) {
                         ErrorBanner(message: model.errorMessage)
 
+                        ProfileSetupBanner()
+
                         ForEach(model.sponsored) { ad in
                             SponsoredCard(ad: ad) { await model.trackAd($0, ad: ad) }
                         }
@@ -176,5 +178,73 @@ struct FeedTuningView: View {
             Slider(value: value, in: 0...1, step: 0.05)
                 .tint(Theme.cyan400)
         }
+    }
+}
+
+
+/// "Finish setting up your profile", the same prompt the web feed shows.
+/// Dismissible for a week rather than forever: a half-finished profile is
+/// worth mentioning again eventually, just not tomorrow.
+struct ProfileSetupBanner: View {
+    private static let snoozeKey = "profileBannerSnoozedUntil"
+
+    @State private var status: ProfileStatus?
+
+    var body: some View {
+        Group {
+            if let status, !status.isComplete, !status.missing.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Finish setting up your profile")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        Text("\(status.completeness)% complete")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.cyan300)
+                        Button {
+                            snooze()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.slate400)
+                        }
+                        .accessibilityLabel("Remind me later")
+                    }
+
+                    ProgressView(value: Double(status.completeness), total: 100)
+                        .tint(Theme.cyan400)
+
+                    ForEach(status.missing.prefix(3)) { gap in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(gap.label)
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(.white)
+                            if let hint = gap.hint {
+                                Text(hint)
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(Theme.slate400)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(14)
+                .card()
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        let snoozedUntil = UserDefaults.standard.double(forKey: Self.snoozeKey)
+        guard Date().timeIntervalSince1970 >= snoozedUntil else { return }
+        status = try? await FriendsService.profileStatus()
+    }
+
+    private func snooze() {
+        UserDefaults.standard.set(Date().addingTimeInterval(7 * 24 * 3600).timeIntervalSince1970,
+                                  forKey: Self.snoozeKey)
+        status = nil
     }
 }

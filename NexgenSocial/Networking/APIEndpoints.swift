@@ -76,6 +76,7 @@ enum APIEndpoints {
         static let root        = "/api/friends"
         static let requests    = "/api/friends/requests"
         static let suggestions = "/api/suggestions/friends"
+        static let profileStatus = "/api/suggestions/profile-status"
         static func request(_ id: String) -> String { "\(requests)/\(id)" }
         static func friend(_ id: String) -> String { "\(root)/\(id)" }
     }
