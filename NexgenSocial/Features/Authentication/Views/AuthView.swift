@@ -314,6 +314,9 @@ struct SignUpForm: View {
     @State private var password = ""
     @State private var acceptedTerms = false
     @State private var busy = false
+    @State private var inviteCode = ""
+    @State private var inviter: InviteSender?
+    @State private var inviteProblem: String?
 
     // Mirrors the server's rule exactly. Catching it here means a clear
     // inline message instead of a round-trip that returns a 400.
@@ -348,6 +351,36 @@ struct SignUpForm: View {
                 .textContentType(.newPassword)
                 .fieldStyle()
 
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("Invite code or link (optional)", text: $inviteCode)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .fieldStyle()
+                    .onChange(of: inviteCode) { _, _ in
+                        inviter = nil
+                        inviteProblem = nil
+                    }
+                    .onSubmit { Task { await lookUpInvite() } }
+
+                if let inviter {
+                    HStack(spacing: 8) {
+                        AvatarView(url: inviter.avatarUrl,
+                                   seed: inviter.username, size: 24)
+                        Text("\(inviter.displayName ?? inviter.username) invited you.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.slate300)
+                    }
+                } else if let inviteProblem {
+                    Text(inviteProblem)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.danger)
+                } else if AuthService.inviteToken(in: inviteCode) != nil {
+                    Button("Check code") { Task { await lookUpInvite() } }
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.cyan300)
+                }
+            }
+
             Toggle(isOn: $acceptedTerms) {
                 Text("I agree to the Terms of Use and Privacy Policy")
                     .font(.system(size: 12))
@@ -370,7 +403,8 @@ struct SignUpForm: View {
                 Task {
                     await session.signUp(email: email, username: username,
                                          displayName: displayName, password: password,
-                                         acceptedTerms: acceptedTerms)
+                                         acceptedTerms: acceptedTerms,
+                                         inviteToken: AuthService.inviteToken(in: inviteCode))
                     busy = false
                 }
             } label: {
@@ -382,6 +416,19 @@ struct SignUpForm: View {
         }
         .padding(18)
         .card()
+    }
+
+    /// The web signup reads the code out of `?ref=` in the URL; iOS has no
+    /// universal links yet, so the code is pasted and checked on demand.
+    private func lookUpInvite() async {
+        guard let token = AuthService.inviteToken(in: inviteCode) else { return }
+        do {
+            inviter = try await SocialAccountsService.invite(token: token).sender
+            inviteProblem = inviter == nil ? "That invite is invalid or expired." : nil
+        } catch {
+            inviter = nil
+            inviteProblem = "That invite is invalid or expired."
+        }
     }
 }
 

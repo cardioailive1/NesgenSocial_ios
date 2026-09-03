@@ -44,11 +44,22 @@ enum AuthService {
     /// Pulls the token out of whatever someone pasted: the whole reset link,
     /// or the token on its own. The emailed link carries it as `?token=`.
     static func resetToken(in pasted: String) -> String? {
+        token(in: pasted, named: "token")
+    }
+
+    /// Pulls the code out of a pasted invite link (`?ref=`) or a bare code.
+    static func inviteToken(in pasted: String) -> String? {
+        token(in: pasted, named: "ref")
+    }
+
+    /// Shared by both: a full link with the named query item, that link's
+    /// last path component, or the bare token typed on its own.
+    static func token(in pasted: String, named name: String) -> String? {
         let text = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         if let url = URL(string: text), url.scheme != nil {
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?.first { $0.name == "token" }?.value
+                .queryItems?.first { $0.name == name }?.value
             if let query, !query.isEmpty { return query }
             let last = url.lastPathComponent
             return last.isEmpty || last == "/" ? nil : last

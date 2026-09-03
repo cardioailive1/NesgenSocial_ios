@@ -113,6 +113,8 @@ enum APIEndpoints {
     enum SocialAccounts {
         static let root    = "/api/social/accounts"
         static let invites = "/api/social/invites"
+        /// Public: resolves an invite token to who sent it, before signup.
+        static func invite(_ token: String) -> String { "/api/social/invites/\(token.urlQueryEscaped)" }
         static func account(_ provider: String) -> String { "/api/social/accounts/\(provider.lowercased())" }
         static func connect(_ provider: String) -> String { "\(account(provider))/connect" }
     }

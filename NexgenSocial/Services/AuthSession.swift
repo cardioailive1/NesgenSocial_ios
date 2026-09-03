@@ -41,21 +41,25 @@ final class AuthSession: ObservableObject {
     }
 
     func signUp(email: String, username: String, displayName: String,
-                password: String, acceptedTerms: Bool) async {
+                password: String, acceptedTerms: Bool,
+                inviteToken: String? = nil) async {
         errorMessage = nil
         guard acceptedTerms else {
             errorMessage = "You must accept the Terms of Use and Privacy Policy."
             return
         }
         await authenticate {
-            try await AuthService.register([
+            var body: [String: Any] = [
                 "email": email,
                 "username": username,
                 "displayName": displayName,
                 "password": password,
                 "acceptedTerms": true,
                 "policyVersion": AppConfig.policyVersion,
-            ])
+            ]
+            // Auto-friends the inviter on the server side.
+            if let inviteToken, !inviteToken.isEmpty { body["inviteToken"] = inviteToken }
+            return try await AuthService.register(body)
         }
     }
 

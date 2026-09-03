@@ -23,6 +23,13 @@ enum SocialAccountsService {
             .get(APIEndpoints.SocialAccounts.invites, as: InvitesResponse.self).invites
     }
 
+    /// Public, no token required: turns an invite code into the person who
+    /// sent it. Throws for an invalid or expired code.
+    static func invite(token: String) async throws -> Invite {
+        try await APIClient.shared
+            .get(APIEndpoints.SocialAccounts.invite(token), as: InviteResponse.self).invite
+    }
+
     /// `contact` is what the invite was addressed to (an email address), so
     /// each recipient can be tracked separately in the sent list.
     static func createInvite(channel: String = "link", contact: String? = nil) async throws -> Invite {
