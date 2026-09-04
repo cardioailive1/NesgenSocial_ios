@@ -53,6 +53,32 @@ final class MarketplaceViewModel: ObservableObject, LoadingViewModel {
         }
     }
 
+    /// Photos picked for a listing that already exists. The server returns the
+    /// updated listing, so the card's carousel and counts refresh in place.
+    func addPhotos(_ items: [PhotosPickerItem], to listing: MarketListing) async {
+        let picked = await AttachmentLoader.load(items)
+        guard !picked.isEmpty else { return }
+        do {
+            let updated = try await MarketplaceService.addMedia(picked, to: listing.id)
+            if let index = listings.firstIndex(where: { $0.id == listing.id }) {
+                listings[index] = updated
+            }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func delete(_ listing: MarketListing) async {
+        do {
+            try await MarketplaceService.delete(listing.id)
+            listings.removeAll { $0.id == listing.id }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func markSold(_ listing: MarketListing) async {
         do {
             try await MarketplaceService.markSold(listing.id)

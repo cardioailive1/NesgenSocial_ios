@@ -33,9 +33,10 @@ struct MarketplaceView: View {
 
                     ForEach(model.listings) { listing in
                         ListingCard(listing: listing,
-                                    isMine: listing.seller?.username == session.currentUser?.username) {
-                            await model.markSold(listing)
-                        }
+                                    isMine: listing.seller?.username == session.currentUser?.username,
+                                    onMarkSold: { await model.markSold(listing) },
+                                    onAddPhotos: { await model.addPhotos($0, to: listing) },
+                                    onDelete: { await model.delete(listing) })
                     }
                 }
                 .padding(14)
@@ -113,6 +114,13 @@ struct ListingCard: View {
     let listing: MarketListing
     let isMine: Bool
     let onMarkSold: () async -> Void
+    let onAddPhotos: ([PhotosPickerItem]) async -> Void
+    let onDelete: () async -> Void
+
+    /// Cleared after each batch is handed over, so picking the same photo
+    /// twice in a row still registers as a change.
+    @State private var newPhotos: [PhotosPickerItem] = []
+    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -139,14 +147,36 @@ struct ListingCard: View {
                 .foregroundStyle(Theme.slate400)
 
             if isMine {
-                Button("Mark as sold") { Task { await onMarkSold() } }
-                    .font(.system(size: 12))
+                HStack(spacing: 8) {
+                    Button("Mark as sold") { Task { await onMarkSold() } }
+                        .buttonStyle(GhostButtonStyle())
+                    PhotosPicker(selection: $newPhotos, maxSelectionCount: 10,
+                                 matching: .any(of: [.images, .videos])) {
+                        Text("Add photos")
+                    }
                     .buttonStyle(GhostButtonStyle())
+                    Button("Delete", role: .destructive) { confirmingDelete = true }
+                        .buttonStyle(GhostButtonStyle())
+                        .foregroundStyle(Theme.danger)
+                }
+                .font(.system(size: 12))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .card()
+        .onChange(of: newPhotos) { _, picked in
+            guard !picked.isEmpty else { return }
+            newPhotos = []
+            Task { await onAddPhotos(picked) }
+        }
+        .confirmationDialog("Delete this listing?", isPresented: $confirmingDelete,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { Task { await onDelete() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its photos go with it. This can't be undone.")
+        }
     }
 
     private var metaLine: String {

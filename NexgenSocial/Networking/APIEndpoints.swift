@@ -184,6 +184,7 @@ enum APIEndpoints {
             query.isEmpty ? root : "\(root)?q=\(query.urlQueryEscaped)"
         }
         static func listing(_ id: String) -> String { "\(root)/\(id)" }
+        static func media(_ id: String) -> String { "\(root)/\(id)/media" }
     }
 
     enum Jobs {
