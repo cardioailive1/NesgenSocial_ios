@@ -90,6 +90,7 @@ enum APIEndpoints {
         static let me     = "/api/users/me"
         static let avatar = "/api/users/me/avatar"
         static let feedWeights = "/api/users/me/feed-weights"
+        static let export = "/api/users/me/export"
         static func profile(_ username: String) -> String { "/api/users/\(username)" }
         static func search(_ query: String) -> String {
             query.isEmpty ? "/api/users" : "/api/users?q=\(query.urlQueryEscaped)"

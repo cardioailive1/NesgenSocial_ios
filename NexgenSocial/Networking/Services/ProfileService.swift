@@ -19,6 +19,20 @@ enum ProfileService {
                                        as: UserProfileResponse.self)
     }
 
+    /// The whole account as JSON, written to a temporary file so it can be
+    /// handed to the share sheet.
+    ///
+    /// The route is `requireAuth`, and it reads the bearer header only -- so
+    /// handing the URL to Safari, which has no token, only ever produced a
+    /// 401. It has to be fetched through the client that carries the header.
+    static func exportData(username: String) async throws -> URL {
+        let data = try await APIClient.shared.getData(APIEndpoints.Users.export)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nexgensocial-export-\(username).json")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
     /// Permanently removes the account and everything attached to it. There
     /// is no undo and no grace period -- the server deletes on the spot.
     static func deleteAccount() async throws {

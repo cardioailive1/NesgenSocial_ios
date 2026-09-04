@@ -12,6 +12,10 @@ struct ProfileSettingsView: View {
     @State private var pushEnabled = false
     @State private var showLogShare = false
     @State private var showEmptyLogAlert = false
+    /// The downloaded export, held until the share sheet is done with it.
+    @State private var exportFile: URL?
+    @State private var isExporting = false
+    @State private var exportError: String?
 
     var body: some View {
         NavigationStack {
@@ -40,14 +44,11 @@ struct ProfileSettingsView: View {
 
                             Divider().background(Theme.line)
 
-                            SettingsRow(icon: "square.and.arrow.up", title: "Export my data") {
-                                // Opens in Safari: the export is a file
-                                // download, which the browser handles better
-                                // than an in-app view.
-                                if let url = URL(string: APIClient.baseURL + "/api/users/me/export") {
-                                    UIApplication.shared.open(url)
-                                }
+                            SettingsRow(icon: "square.and.arrow.up",
+                                        title: isExporting ? "Preparing export…" : "Export my data") {
+                                Task { await exportData() }
                             }
+                            .disabled(isExporting)
                             Divider().background(Theme.line)
                             SettingsRow(icon: "doc.text", title: "Privacy Policy") {
                                 UIApplication.shared.open(URL(string: AppConfig.privacyURL)!)
@@ -126,6 +127,15 @@ struct ProfileSettingsView: View {
             .sheet(isPresented: $showLogShare) {
                 ShareSheet(items: [PushLog.fileURL])
             }
+            .sheet(isPresented: Binding(get: { exportFile != nil },
+                                        set: { if !$0 { exportFile = nil } })) {
+                ShareSheet(items: [exportFile].compactMap { $0 })
+            }
+            .alert("Couldn't export your data", isPresented: .constant(exportError != nil)) {
+                Button("OK", role: .cancel) { exportError = nil }
+            } message: {
+                Text(exportError ?? "")
+            }
             .alert("No push log yet", isPresented: $showEmptyLogAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -157,6 +167,20 @@ private extension ProfileSettingsView {
     /// Shares the file itself rather than its text: AirDrop, Files and Mail
     /// all accept a `.txt` attachment, and a pasted wall of text loses the
     /// line breaks that make the log readable.
+    /// The export route only accepts the bearer token, so the file is fetched
+    /// through the API client and then shared, rather than handed to Safari
+    /// as a URL -- which arrived with no credentials and came back a 401.
+    func exportData() async {
+        isExporting = true
+        defer { isExporting = false }
+        do {
+            exportFile = try await ProfileService.exportData(
+                username: session.currentUser?.username ?? "me")
+        } catch {
+            exportError = error.localizedDescription
+        }
+    }
+
     func exportPushLog() {
         guard FileManager.default.fileExists(atPath: PushLog.fileURL.path) else {
             showEmptyLogAlert = true

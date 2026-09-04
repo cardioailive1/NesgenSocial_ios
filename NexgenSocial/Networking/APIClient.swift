@@ -189,6 +189,14 @@ actor APIClient {
         }
     }
 
+    /// The bytes of a response, with the auth header on and the cache out of
+    /// the way. For downloads -- a data export is a file, not a model, and
+    /// keeping a copy of the whole account in the response cache would be
+    /// worse than useless.
+    func getData(_ path: String) async throws -> Data {
+        try await performData(makeRequest(path))
+    }
+
     @discardableResult
     private func fetchAndStore(_ path: String) async throws -> Data {
         let data = try await performData(makeRequest(path))
