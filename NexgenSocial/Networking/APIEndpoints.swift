@@ -61,6 +61,9 @@ enum APIEndpoints {
         static let root = "/api/messages"
         static func withUser(_ username: String) -> String { "/api/messages/with/\(username)" }
         static func messages(in conversationId: String) -> String { "/api/messages/\(conversationId)/messages" }
+        /// A single message, for deletion. Not nested under its conversation:
+        /// the route is flat, `/api/messages/messages/:id`.
+        static func message(_ id: String) -> String { "/api/messages/messages/\(id)" }
     }
 
     enum Calls {
@@ -84,6 +87,8 @@ enum APIEndpoints {
 
     enum Follows {
         static func user(_ username: String) -> String { "/api/follows/\(username)" }
+        static func followers(_ username: String) -> String { "/api/follows/\(username)/followers" }
+        static func following(_ username: String) -> String { "/api/follows/\(username)/following" }
     }
 
     enum Users {

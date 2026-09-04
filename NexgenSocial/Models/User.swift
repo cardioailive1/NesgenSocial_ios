@@ -69,6 +69,8 @@ struct PrivacySettings: Codable {
 
 struct MeResponse: Codable { let user: User }
 struct UsersResponse: Codable { let users: [User] }
+struct FollowersResponse: Codable { let followers: [User] }
+struct FollowingResponse: Codable { let following: [User] }
 struct ProfileMeResponse: Codable {
     let profile: ExtendedProfile
     let privacySettings: PrivacySettings?

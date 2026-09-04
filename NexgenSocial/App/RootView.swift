@@ -86,6 +86,7 @@ struct RootView: View {
 struct MainTabView: View {
     @State private var selectedTab = 0
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var unread = UnreadBadge.shared
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -107,6 +108,7 @@ struct MainTabView: View {
             MessagesView()
                 .environment(\.isTabActive, selectedTab == 3)
                 .tabItem { Label("Messages", systemImage: "bubble.left.fill") }
+                .badge(unread.count)
                 .tag(3)
 
             ProfileView()
@@ -116,8 +118,13 @@ struct MainTabView: View {
         }
         .tint(Theme.cyan400)
         .task { await MediaPermissions.requestAll() }
+        // The badge is refreshed on every foreground rather than polled: a
+        // push already wakes the app for the messages that matter, and it is
+        // updated in place whenever the Messages screen loads its list.
+        // It goes first because `pollForIncomingCalls` does not return.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await UnreadBadge.shared.refresh()
             await CallService.shared.pollForIncomingCalls()
         }
         .task {

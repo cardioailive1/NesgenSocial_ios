@@ -42,6 +42,9 @@ struct ConversationView: View {
             guard scenePhase == .active else { return }
             await model.pollForNewMessages()
         }
+        // Reading the thread is what clears its unread count on the server,
+        // so the tab badge is only right once the reader has left.
+        .onDisappear { Task { await UnreadBadge.shared.refresh() } }
     }
 
     private var messageList: some View {
@@ -60,6 +63,16 @@ struct ConversationView: View {
                         }
                         MessageBubble(message: message, isMine: model.isMine(message))
                             .id(message.id)
+                            // Only the viewer's own messages: the route
+                            // rejects anyone else's, and offering an action
+                            // that always fails is worse than not offering it.
+                            .contextMenu {
+                                if model.isMine(message) {
+                                    Button("Delete", systemImage: "trash", role: .destructive) {
+                                        Task { await model.delete(message) }
+                                    }
+                                }
+                            }
                     }
                 }
                 .padding(14)

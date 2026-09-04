@@ -41,6 +41,7 @@ final class MessagesViewModel: ObservableObject, LoadingViewModel {
         defer { isLoading = false }
         await attempt {
             conversations = try await MessagesService.conversations()
+            UnreadBadge.shared.update(from: conversations)
         }
     }
 

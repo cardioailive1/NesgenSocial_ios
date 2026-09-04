@@ -4,9 +4,18 @@ import Foundation
 /// a conversation with a specific person.
 enum MessagesService {
 
-    static func conversations() async throws -> [Conversation] {
+    /// `maxAge: 0` is for the unread badge after a thread has been read --
+    /// the cached list still has the old count on it.
+    static func conversations(maxAge: TimeInterval = 300) async throws -> [Conversation] {
         try await APIClient.shared
-            .get(APIEndpoints.Messages.root, as: ConversationsResponse.self).conversations
+            .get(APIEndpoints.Messages.root, as: ConversationsResponse.self, maxAge: maxAge)
+            .conversations
+    }
+
+    /// Removes one message for everyone in the thread. The route is flat,
+    /// `/api/messages/messages/:id`, not nested under the conversation.
+    static func delete(messageId: String) async throws {
+        _ = try await APIClient.shared.delete(APIEndpoints.Messages.message(messageId))
     }
 
     /// Polled every 5 seconds while a conversation is open, so it is never

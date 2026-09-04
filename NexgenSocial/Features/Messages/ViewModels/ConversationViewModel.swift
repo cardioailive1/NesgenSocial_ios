@@ -61,6 +61,20 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Removes one of the viewer's own messages, for both sides. Dropped from
+    /// the list before the request so the bubble goes on the tap; the next
+    /// poll puts it back if the server refused.
+    func delete(_ message: Message) async {
+        let previous = messages
+        messages.removeAll { $0.id == message.id }
+        do {
+            try await MessagesService.delete(messageId: message.id)
+        } catch {
+            messages = previous
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func send() async {
         guard canSend, !isSending else { return }
         isSending = true

@@ -68,8 +68,16 @@ struct ProfileView: View {
 
                 HStack(spacing: 0) {
                     StatItem(value: model.postCount, label: "posts")
-                    StatItem(value: model.stats?.followerCount ?? 0, label: "followers")
-                    StatItem(value: model.stats?.followingCount ?? 0, label: "following")
+                    NavigationLink {
+                        FollowListView(username: user?.username ?? "", direction: .followers)
+                    } label: {
+                        StatItem(value: model.stats?.followerCount ?? 0, label: "followers")
+                    }
+                    NavigationLink {
+                        FollowListView(username: user?.username ?? "", direction: .following)
+                    } label: {
+                        StatItem(value: model.stats?.followingCount ?? 0, label: "following")
+                    }
                     StatItem(value: model.stats?.friendCount ?? 0, label: "friends")
                 }
             }

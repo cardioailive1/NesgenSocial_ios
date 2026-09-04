@@ -24,6 +24,19 @@ enum DiscoveryService {
             .get(APIEndpoints.Marketplace.listings(query: query), as: ListingsResponse.self).listings
     }
 
+    /// Who follows `username`, and who they follow back. Both routes are
+    /// public -- they carry no viewer relationship fields, so rows here get
+    /// a name and an avatar and nothing else.
+    static func followers(of username: String) async throws -> [User] {
+        try await APIClient.shared
+            .get(APIEndpoints.Follows.followers(username), as: FollowersResponse.self).followers
+    }
+
+    static func following(of username: String) async throws -> [User] {
+        try await APIClient.shared
+            .get(APIEndpoints.Follows.following(username), as: FollowingResponse.self).following
+    }
+
     static func setFollowing(_ following: Bool, username: String) async throws {
         if following {
             _ = try await APIClient.shared.post(APIEndpoints.Follows.user(username), as: EmptyResponse.self)
