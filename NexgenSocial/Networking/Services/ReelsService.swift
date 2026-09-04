@@ -41,6 +41,19 @@ enum ReelsService {
         }
     }
 
+    /// Reel comments are their own table server-side, but they come back in
+    /// the same shape post comments do, so they decode into `Comment` too.
+    static func comments(for reelId: String) async throws -> [Comment] {
+        try await APIClient.shared.get(APIEndpoints.Reels.comments(reelId),
+                                       as: CommentsResponse.self).comments
+    }
+
+    static func addComment(_ body: String, to reelId: String) async throws -> Comment {
+        try await APIClient.shared.post(APIEndpoints.Reels.comments(reelId),
+                                        body: ["body": body],
+                                        as: CommentResponse.self).comment
+    }
+
     /// Watch time drives ranking on the server, so it's reported per reel
     /// rather than only for reels that were watched to the end.
     static func reportView(reelId: String, watchedSec: Double, completed: Bool) async throws {

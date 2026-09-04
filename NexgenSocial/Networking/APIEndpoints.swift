@@ -52,6 +52,7 @@ enum APIEndpoints {
         }
         static func like(_ id: String) -> String { "/api/reels/\(id)/like" }
         static func view(_ id: String) -> String { "/api/reels/\(id)/view" }
+        static func comments(_ id: String) -> String { "/api/reels/\(id)/comments" }
     }
 
     // MARK: - Messaging & calls

@@ -9,6 +9,8 @@ struct ReelsView: View {
     /// TabView keeps this view alive when another tab is selected, so the cells
     /// never get an `onDisappear` and would keep playing audio off-screen.
     @State private var onScreen = false
+    /// The reel whose comments are open, if any.
+    @State private var commentingReel: Reel?
     @Environment(\.scenePhase) private var scenePhase
     /// The tab's own selection, which is the signal `onAppear`/`onDisappear`
     /// don't reliably give inside a `TabView`.
@@ -54,6 +56,8 @@ struct ReelsView: View {
                                     await model.toggleLike(reel)
                                 } onWatched: { seconds, completed in
                                     await model.reportView(reel, watchedSec: seconds, completed: completed)
+                                } onComment: {
+                                    commentingReel = reel
                                 }
                                 .frame(width: geo.size.width, height: geo.size.height)
                                 .id(reel.id)
@@ -78,6 +82,9 @@ struct ReelsView: View {
         }
         .overlay(alignment: .top) { tagRail }
         .ignoresSafeArea()
+        .sheet(item: $commentingReel) { reel in
+            ReelCommentsSheet(reel: reel) { model.countNewComment(on: reel) }
+        }
         .task { await model.load() }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
@@ -132,6 +139,7 @@ struct ReelCell: View {
     let isActive: Bool
     let onLike: () async -> Void
     let onWatched: (Double, Bool) async -> Void
+    let onComment: () -> Void
 
     @State private var player: AVPlayer?
     @State private var watchedSeconds: Double = 0
@@ -210,6 +218,15 @@ struct ReelCell: View {
                                 .font(.system(size: 26))
                                 .foregroundStyle((reel.likedByViewer ?? false) ? Theme.cyan400 : .white)
                             Text("\(reel.likeCount ?? 0)")
+                                .font(.system(size: 11)).foregroundStyle(.white)
+                        }
+                    }
+                    Button(action: onComment) {
+                        VStack(spacing: 2) {
+                            Image(systemName: "bubble.right")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.white)
+                            Text("\(reel.commentCount ?? 0)")
                                 .font(.system(size: 11)).foregroundStyle(.white)
                         }
                     }

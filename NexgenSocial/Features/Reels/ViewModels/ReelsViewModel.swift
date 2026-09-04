@@ -37,6 +37,13 @@ final class ReelsViewModel: ObservableObject, LoadingViewModel {
                                            completed: completed)
     }
 
+    /// The comment sheet posts through the service directly; this keeps the
+    /// count under the reel honest without refetching the whole feed.
+    func countNewComment(on reel: Reel) {
+        guard let index = reels.firstIndex(where: { $0.id == reel.id }) else { return }
+        reels[index].commentCount = (reels[index].commentCount ?? 0) + 1
+    }
+
     func toggleLike(_ reel: Reel) async {
         guard let index = reels.firstIndex(where: { $0.id == reel.id }) else { return }
         reels[index].toggleLikeLocally()
