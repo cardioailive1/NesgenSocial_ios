@@ -49,6 +49,12 @@ enum PostsService {
                                          as: PostResponse.self).post
     }
 
+    /// The server only lets the author through, and it removes the post's
+    /// comments, notes, and revisions with it.
+    static func delete(_ postId: String) async throws {
+        _ = try await APIClient.shared.delete(APIEndpoints.Posts.detail(postId))
+    }
+
     static func history(for postId: String) async throws -> [PostRevision] {
         try await APIClient.shared.get(APIEndpoints.Posts.history(postId),
                                        as: PostHistoryResponse.self).revisions

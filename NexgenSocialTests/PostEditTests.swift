@@ -99,7 +99,57 @@ final class PostEditTests: XCTestCase {
         XCTAssertNil(model.revisions)
     }
 
-    private final class RequestBox: @unchecked Sendable {
-        var calls: [(String, String)] = []
+}
+
+fileprivate final class RequestBox: @unchecked Sendable {
+    var calls: [(String, String)] = []
+}
+
+/// Deleting is a DELETE to the post itself, and the lists that show the post
+/// learn about it from the `.postDeleted` broadcast rather than a reload.
+@MainActor
+final class PostDeleteTests: XCTestCase {
+
+    override func tearDown() {
+        StubAPI.restore()
+        super.tearDown()
+    }
+
+    func testDeletingSendsADeleteAndAnnouncesThePostId() async {
+        let box = RequestBox()
+        StubAPI.install { request in
+            box.calls.append((request.httpMethod ?? "", request.url?.path ?? ""))
+            return (200, Data("{}".utf8))
+        }
+
+        var announced: String?
+        let observer = NotificationCenter.default.addObserver(
+            forName: .postDeleted, object: nil, queue: .main) { announced = $0.object as? String }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let model = PostDetailViewModel(post: Post(id: "p1", body: "goodbye"))
+        let deleted = await model.deletePost()
+
+        XCTAssertTrue(deleted)
+        XCTAssertTrue(box.calls.contains { $0 == ("DELETE", "/api/posts/p1") },
+                      "expected a DELETE to /api/posts/p1; sent \(box.calls)")
+        XCTAssertEqual(announced, "p1", "the lists filter on this id")
+    }
+
+    /// A refused delete must not dismiss the screen or hide the post anywhere.
+    func testAFailedDeleteReportsTheErrorAndAnnouncesNothing() async {
+        StubAPI.install(json: #"{"error":"Not your post."}"#, status: 403)
+
+        var announced = false
+        let observer = NotificationCenter.default.addObserver(
+            forName: .postDeleted, object: nil, queue: .main) { _ in announced = true }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let model = PostDetailViewModel(post: Post(id: "p1", body: "still here"))
+        let deleted = await model.deletePost()
+
+        XCTAssertFalse(deleted)
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertFalse(announced)
     }
 }

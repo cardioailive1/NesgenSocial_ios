@@ -95,6 +95,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
 extension Notification.Name {
     static let openDeepLink = Notification.Name("openDeepLink")
+    /// Carries the deleted post's id as the object.
+    static let postDeleted = Notification.Name("postDeleted")
 }
 
 private extension UIApplication.State {

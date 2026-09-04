@@ -76,6 +76,19 @@ final class PostDetailViewModel: ObservableObject, LoadingViewModel {
         }
     }
 
+    /// Tells the rest of the app the post is gone so the lists it appears in
+    /// can drop it, then reports success so the screen can dismiss itself.
+    func deletePost() async -> Bool {
+        do {
+            try await PostsService.delete(post.id)
+            NotificationCenter.default.post(name: .postDeleted, object: post.id)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func loadHistory() async {
         do {
             revisions = try await PostsService.history(for: post.id)

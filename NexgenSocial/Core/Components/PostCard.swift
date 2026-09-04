@@ -7,6 +7,12 @@ struct PostCard: View {
     /// in one navigation button broke both. Nil where there is nowhere to go.
     var onOpen: (() -> Void)?
     let onLike: () async -> Void
+    /// Set when the author deletes this post from its detail screen. Hiding
+    /// here covers every list that renders a card, instead of teaching each
+    /// one to prune its own array.
+    // ponytail: the row's spacing stays behind until the list next reloads;
+    // give the lists a real remove step if that gap becomes noticeable.
+    @State private var isDeleted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -80,5 +86,11 @@ struct PostCard: View {
         }
         .padding(14)
         .card()
+        .opacity(isDeleted ? 0 : 1)
+        .frame(maxHeight: isDeleted ? 0 : .infinity)
+        .clipped()
+        .onReceive(NotificationCenter.default.publisher(for: .postDeleted)) { note in
+            if note.object as? String == post.id { isDeleted = true }
+        }
     }
 }

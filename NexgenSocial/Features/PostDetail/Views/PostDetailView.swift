@@ -7,6 +7,8 @@ struct PostDetailView: View {
     @State private var showingNoteComposer = false
     @State private var showingEditor = false
     @State private var showingHistory = false
+    @State private var confirmingDelete = false
+    @Environment(\.dismiss) private var dismiss
 
     /// Only the author can edit, which is also what the server enforces.
     private var isMine: Bool {
@@ -88,12 +90,24 @@ struct PostDetailView: View {
                     if model.post.editedAt != nil {
                         Button("Edit history") { showingHistory = true }
                     }
+                    if isMine {
+                        Button("Delete post", role: .destructive) { confirmingDelete = true }
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
             }
         }
         .tint(Theme.cyan400)
+        .confirmationDialog("Delete this post?", isPresented: $confirmingDelete,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task { if await model.deletePost() { dismiss() } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its comments and context notes go with it. This can't be undone.")
+        }
         .sheet(isPresented: $showingNoteComposer) {
             ContextNoteComposer(text: $model.noteDraft) {
                 await model.addContextNote()
