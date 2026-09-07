@@ -10,6 +10,24 @@ final class ReelsViewModel: ObservableObject, LoadingViewModel {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
+    /// Removes it here and tells every other list holding the same reel.
+    /// A reel appears in the pager and on its author's profile at once, so
+    /// the removal is broadcast rather than returned.
+    func delete(_ reel: Reel) async {
+        do {
+            try await ReelsService.delete(reel.id)
+            reels.removeAll { $0.id == reel.id }
+            NotificationCenter.default.post(name: .reelDeleted, object: reel.id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Someone else's screen deleted a reel this list is also showing.
+    func removeDeleted(_ reelId: String) {
+        reels.removeAll { $0.id == reelId }
+    }
+
     func load() async {
         isLoading = true
         defer { isLoading = false }

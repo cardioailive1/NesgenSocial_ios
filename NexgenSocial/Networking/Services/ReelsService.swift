@@ -65,4 +65,16 @@ enum ReelsService {
                                             // would leave nothing cached.
                                             invalidates: false)
     }
+
+    /// Every reel by one person, newest first — the Reels tab on a profile.
+    static func reels(by username: String) async throws -> [Reel] {
+        try await APIClient.shared.get(APIEndpoints.Reels.by(username: username),
+                                       as: ReelsResponse.self).reels
+    }
+
+    /// The server 404s rather than 403s when you don't own the reel, so the
+    /// menu is only ever offered to the author.
+    static func delete(_ reelId: String) async throws {
+        _ = try await APIClient.shared.delete(APIEndpoints.Reels.reel(reelId))
+    }
 }

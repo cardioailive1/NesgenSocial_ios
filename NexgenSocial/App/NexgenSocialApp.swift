@@ -97,6 +97,10 @@ extension Notification.Name {
     static let openDeepLink = Notification.Name("openDeepLink")
     /// Carries the deleted post's id as the object.
     static let postDeleted = Notification.Name("postDeleted")
+    /// Carries the deleted reel's id as the object. Broadcast rather than
+    /// returned, because a reel shows up in the pager and on its author's
+    /// profile at the same time.
+    static let reelDeleted = Notification.Name("reelDeleted")
 }
 
 private extension UIApplication.State {

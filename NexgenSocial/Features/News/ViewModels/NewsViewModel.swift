@@ -166,3 +166,52 @@ final class NewsroomDetailViewModel: ObservableObject, LoadingViewModel {
         }
     }
 }
+
+@MainActor
+final class EditArticleViewModel: ObservableObject {
+    @Published var headline = ""
+    @Published var standfirst = ""
+    @Published var body = ""
+    @Published var byline = ""
+    @Published var isBreaking = false
+    @Published private(set) var isSaving = false
+    @Published var errorMessage: String?
+
+    private var filled = false
+
+    var canSubmit: Bool {
+        !isSaving
+            && !headline.trimmingCharacters(in: .whitespaces).isEmpty
+            && !body.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// `onAppear` fires again when the sheet comes back from the background,
+    /// so the form is seeded once and never overwrites what's being typed.
+    func fill(from article: NewsArticle) {
+        guard !filled else { return }
+        filled = true
+        headline = article.headline
+        standfirst = article.standfirst ?? ""
+        body = article.body ?? ""
+        byline = article.byline ?? ""
+        isBreaking = article.isBreaking ?? false
+    }
+
+    func save(articleId: String) async -> Bool {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            _ = try await NewsService.updateArticle(articleId, fields: [
+                "headline": headline.trimmingCharacters(in: .whitespaces),
+                "standfirst": standfirst.trimmingCharacters(in: .whitespaces),
+                "body": body.trimmingCharacters(in: .whitespaces),
+                "byline": byline.trimmingCharacters(in: .whitespaces),
+                "isBreaking": isBreaking,
+            ])
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+}

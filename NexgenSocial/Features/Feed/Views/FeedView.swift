@@ -34,6 +34,12 @@ struct FeedView: View {
                             SponsoredCard(ad: ad) { await model.trackAd($0, ad: ad) }
                         }
 
+                        ForEach(model.politicalAds) { ad in
+                            PoliticalSponsoredCard(ad: ad) {
+                                await PoliticalService.track($0, adId: ad.id)
+                            }
+                        }
+
                         // Not wrapped in a `NavigationLink`: that made the
                         // whole card one button, so swiping between a post's
                         // photos fought the link, tapping a photo navigated

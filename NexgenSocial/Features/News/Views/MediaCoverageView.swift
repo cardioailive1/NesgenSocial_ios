@@ -18,6 +18,7 @@ struct MediaCoverageView: View {
     }
 
     private var myNewsrooms: [Newsroom] { model.mine(username: session.currentUser?.username) }
+    private var myNewsroomIds: Set<String> { Set(myNewsrooms.map(\.id)) }
 
     var body: some View {
         ZStack {
@@ -63,8 +64,13 @@ struct MediaCoverageView: View {
             EmptyNotice("No stories published yet. Create a newsroom to start publishing.")
         }
         ForEach(model.articles) { article in
-            ArticleCard(article: article)
-                .padding(.horizontal, 14)
+            // The coverage feed mixes every newsroom, so ownership is decided
+            // per card from the newsrooms you own.
+            ArticleCard(article: article,
+                        canEdit: myNewsroomIds.contains(article.newsroom?.id ?? "")) {
+                await model.load()
+            }
+            .padding(.horizontal, 14)
         }
     }
 

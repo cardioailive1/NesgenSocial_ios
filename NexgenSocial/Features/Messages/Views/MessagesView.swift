@@ -4,6 +4,8 @@ import SwiftUI
 /// friends the user hasn't messaged yet.
 struct MessagesView: View {
     @StateObject private var model = MessagesViewModel()
+    /// Set from a call row's long press.
+    @State private var profileRoute: ProfileRoute?
     @EnvironmentObject private var session: AuthSession
     @EnvironmentObject private var callService: CallService
 
@@ -33,6 +35,7 @@ struct MessagesView: View {
             .searchable(text: $model.searchText,
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: model.tab == .chats ? "Search chats and friends" : "Search calls")
+            .navigationDestination(item: $profileRoute) { PersonProfileView(username: $0.username) }
             .navigationDestination(item: $model.openedConversation) { conversation in
                 ConversationView(conversation: conversation)
             }
@@ -122,6 +125,17 @@ struct MessagesView: View {
                     CallHistoryRow(call: call, viewerId: session.currentUser?.id)
                 }
                 .listRowBackground(Theme.navy900)
+                // Tapping the row redials, which is what this list is for, so
+                // the profile is the long press rather than a second target
+                // fighting the first.
+                .contextMenu {
+                    if let username = call.otherParty(forUserId: session.currentUser?.id)?.username,
+                       username != session.currentUser?.username {
+                        Button("View profile", systemImage: "person.crop.circle") {
+                            profileRoute = ProfileRoute(username: username)
+                        }
+                    }
+                }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)

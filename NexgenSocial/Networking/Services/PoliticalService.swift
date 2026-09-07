@@ -75,4 +75,26 @@ enum PoliticalService {
             _ = try await APIClient.shared.delete(APIEndpoints.Political.follow(pageId))
         }
     }
+
+    /// Ads currently eligible to run in the feed.
+    static func activeAds() async throws -> [PoliticalAd] {
+        try await APIClient.shared.get(APIEndpoints.Political.activeAds,
+                                       as: PoliticalArchiveResponse.self).ads
+    }
+
+    /// Stops an ad. It stays in the archive afterwards -- that permanence is
+    /// the point -- so this flips it to ENDED rather than deleting it.
+    static func endAd(_ id: String) async throws -> PoliticalAd {
+        try await APIClient.shared.post(APIEndpoints.Political.endAd(id),
+                                        as: PoliticalAdResponse.self).ad
+    }
+
+    /// IMPRESSION and CLICK, fire-and-forget like the sponsored-ad tracker:
+    /// a dropped analytics event must never surface as an error in the feed.
+    static func track(_ type: String, adId: String) async {
+        _ = try? await APIClient.shared.post(APIEndpoints.Political.adEvent(adId),
+                                             body: ["type": type],
+                                             as: EmptyResponse.self,
+                                             invalidates: false)
+    }
 }

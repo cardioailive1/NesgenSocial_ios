@@ -133,12 +133,16 @@ struct CommentRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(url: comment.author?.avatarUrl,
-                       seed: comment.author?.username ?? "?", size: 32)
+            AuthorLink(username: comment.author?.username) {
+                AvatarView(url: comment.author?.avatarUrl,
+                           seed: comment.author?.username ?? "?", size: 32)
+            }
             VStack(alignment: .leading, spacing: 3) {
-                Text(comment.author?.displayName ?? "Someone")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                AuthorLink(username: comment.author?.username) {
+                    Text(comment.author?.displayName ?? "Someone")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
                 Text(comment.body)
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.slate300)

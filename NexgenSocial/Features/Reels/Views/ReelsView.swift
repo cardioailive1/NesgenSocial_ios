@@ -15,8 +15,15 @@ struct ReelsView: View {
     /// The tab's own selection, which is the signal `onAppear`/`onDisappear`
     /// don't reliably give inside a `TabView`.
     @Environment(\.isTabActive) private var isTabActive
+    @EnvironmentObject private var session: AuthSession
 
     var body: some View {
+        NavigationStack {
+            player
+        }
+    }
+
+    private var player: some View {
         GeometryReader { geo in
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -51,8 +58,13 @@ struct ReelsView: View {
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 0) {
                             ForEach(model.reels) { reel in
-                                ReelCell(reel: reel, isActive: onScreen && isTabActive && scenePhase == .active
-                                                    && currentID == reel.id) {
+                                ReelCell(reel: reel,
+                                         isActive: onScreen && isTabActive
+                                                    && scenePhase == .active
+                                                    && currentID == reel.id,
+                                         onDelete: reel.author?.username
+                                            == session.currentUser?.username
+                                            ? { await model.delete(reel) } : nil) {
                                     await model.toggleLike(reel)
                                 } onWatched: { seconds, completed in
                                     await model.reportView(reel, watchedSec: seconds, completed: completed)
@@ -86,6 +98,9 @@ struct ReelsView: View {
             ReelCommentsSheet(reel: reel) { model.countNewComment(on: reel) }
         }
         .task { await model.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .reelDeleted)) { note in
+            if let id = note.object as? String { model.removeDeleted(id) }
+        }
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
     }
@@ -137,9 +152,15 @@ struct ReelsView: View {
 struct ReelCell: View {
     let reel: Reel
     let isActive: Bool
+    /// Set only when the viewer is the author. Declared ahead of the three
+    /// closures below so it can be passed in parentheses: a trailing closure
+    /// label can't take a ternary.
+    let onDelete: (() async -> Void)?
     let onLike: () async -> Void
     let onWatched: (Double, Bool) async -> Void
     let onComment: () -> Void
+
+    @State private var confirmingDelete = false
 
     @State private var player: AVPlayer?
     @State private var watchedSeconds: Double = 0
@@ -191,11 +212,14 @@ struct ReelCell: View {
             // short-form player.
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        AvatarView(url: reel.author?.avatarUrl, seed: reel.author?.username ?? "?", size: 32)
-                        Text("@\(reel.author?.username ?? "")")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
+                    AuthorLink(username: reel.author?.username) {
+                        HStack(spacing: 8) {
+                            AvatarView(url: reel.author?.avatarUrl,
+                                       seed: reel.author?.username ?? "?", size: 32)
+                            Text("@\(reel.author?.username ?? "")")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
                     }
                     if let caption = reel.caption {
                         Text(caption)
@@ -234,6 +258,17 @@ struct ReelCell: View {
                         Image(systemName: "eye").font(.system(size: 22)).foregroundStyle(.white)
                         Text("\(reel.viewCount ?? 0)").font(.system(size: 11)).foregroundStyle(.white)
                     }
+                    if onDelete != nil {
+                        Menu {
+                            Button("Delete reel", systemImage: "trash", role: .destructive) {
+                                confirmingDelete = true
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.white)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -242,6 +277,12 @@ struct ReelCell: View {
                 LinearGradient(colors: [.clear, .black.opacity(0.7)],
                                startPoint: .top, endPoint: .bottom)
             )
+        }
+        .confirmationDialog("Delete this reel?", isPresented: $confirmingDelete,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { Task { await onDelete?() } }
+        } message: {
+            Text("It goes from the reels feed and from your profile. This can't be undone.")
         }
         .onChange(of: isActive) { _, active in
             active ? start() : stop()

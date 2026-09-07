@@ -97,6 +97,7 @@ struct NewsroomCard: View {
 
 struct NewsroomDetailView: View {
     @StateObject private var model: NewsroomDetailViewModel
+    @EnvironmentObject private var session: AuthSession
 
     init(slug: String) {
         _model = StateObject(wrappedValue: NewsroomDetailViewModel(slug: slug))
@@ -132,8 +133,12 @@ struct NewsroomDetailView: View {
 
                         SectionHeader("Articles")
                         ForEach(newsroom.articles ?? []) { article in
-                            ArticleCard(article: article)
-                                .padding(.horizontal, 14)
+                            ArticleCard(article: article,
+                                        canEdit: newsroom.owner?.username
+                                            == session.currentUser?.username) {
+                                await model.load()
+                            }
+                            .padding(.horizontal, 14)
                         }
                     }
                 }
@@ -149,19 +154,44 @@ struct NewsroomDetailView: View {
 
 struct ArticleCard: View {
     let article: NewsArticle
+    /// Set only where the viewer owns the newsroom the story came from. The
+    /// server checks ownership too, so this is about not showing a menu that
+    /// can only 404.
+    var canEdit = false
+    /// Reload the list the card came from after an edit or a delete.
+    var onChanged: (() async -> Void)?
+
     /// Stories run long; the card shows the top of one and opens on demand,
     /// as "Read full story" does on the web.
     @State private var expanded = false
+    @State private var editing = false
+    @State private var confirmingDelete = false
+    @State private var deleteFailed: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if article.isBreaking == true {
-                Text("BREAKING")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.navy950)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Theme.danger)
-                    .clipShape(Capsule())
+            HStack(alignment: .top) {
+                if article.isBreaking == true {
+                    Text("BREAKING")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Theme.navy950)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Theme.danger)
+                        .clipShape(Capsule())
+                }
+                Spacer(minLength: 0)
+                if canEdit {
+                    Menu {
+                        Button("Edit story", systemImage: "pencil") { editing = true }
+                        Button("Delete story", systemImage: "trash", role: .destructive) {
+                            confirmingDelete = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundStyle(Theme.slate400)
+                            .padding(4)
+                    }
+                }
             }
             Text(article.headline)
                 .font(.system(size: 15, weight: .semibold))
@@ -190,6 +220,31 @@ struct ArticleCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .card()
+        .sheet(isPresented: $editing) {
+            EditArticleView(article: article) { await onChanged?() }
+        }
+        .confirmationDialog("Delete this story?", isPresented: $confirmingDelete,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    do {
+                        try await NewsService.deleteArticle(article.id)
+                        await onChanged?()
+                    } catch {
+                        deleteFailed = error.localizedDescription
+                    }
+                }
+            }
+        } message: {
+            Text("It disappears from the coverage feed and from your newsroom.")
+        }
+        .alert("Couldn't delete the story",
+               isPresented: Binding(get: { deleteFailed != nil },
+                                    set: { if !$0 { deleteFailed = nil } })) {
+            Button("OK", role: .cancel) { deleteFailed = nil }
+        } message: {
+            Text(deleteFailed ?? "")
+        }
     }
 
     private var footnote: String {
@@ -204,5 +259,65 @@ struct ArticleCard: View {
     private static func day(_ iso: String) -> String {
         guard let date = ISO8601DateFormatter().date(from: iso) else { return "" }
         return date.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+
+/// Editing a published story. Media isn't editable: the server's PATCH takes
+/// text fields only, and changing the body records a public correction.
+struct EditArticleView: View {
+    @Environment(\.dismiss) private var dismiss
+    let article: NewsArticle
+    let onSaved: () async -> Void
+
+    @StateObject private var model = EditArticleViewModel()
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+                Form {
+                    SwiftUI.Section {
+                        TextField("Headline", text: $model.headline)
+                        TextField("Standfirst / summary (optional)", text: $model.standfirst)
+                        TextField("Story body", text: $model.body, axis: .vertical)
+                            .lineLimit(6...14)
+                        TextField("Byline (optional)", text: $model.byline)
+                        Toggle("Mark as breaking", isOn: $model.isBreaking)
+                    } footer: {
+                        Text("Changing the body marks the story as corrected, and that label is shown to readers.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.slate400)
+                    }
+                    .listRowBackground(Theme.navy900)
+
+                    if model.errorMessage != nil {
+                        ErrorBanner(message: model.errorMessage)
+                            .listRowBackground(Color.clear)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .foregroundStyle(.white)
+                .tint(Theme.cyan400)
+            }
+            .navigationTitle("Edit story")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.tint(Theme.slate400)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.isSaving ? "Saving…" : "Save") {
+                        Task {
+                            guard await model.save(articleId: article.id) else { return }
+                            dismiss()
+                            await onSaved()
+                        }
+                    }
+                    .disabled(!model.canSubmit)
+                    .tint(Theme.cyan400)
+                }
+            }
+            .onAppear { model.fill(from: article) }
+        }
     }
 }

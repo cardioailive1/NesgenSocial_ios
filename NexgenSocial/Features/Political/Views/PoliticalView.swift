@@ -123,6 +123,10 @@ struct PoliticalArchiveView: View {
 
 struct PoliticalAdCard: View {
     let ad: PoliticalAd
+    /// Set only on a page you own, and only while the ad is still running.
+    var onEnd: (() async -> Void)?
+
+    @State private var ending = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -154,6 +158,32 @@ struct PoliticalAdCard: View {
             Text(details)
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.slate400)
+
+            HStack {
+                // A tap on the ad's own link is a click wherever the ad is
+                // shown, archive included.
+                if let raw = ad.targetUrl, let url = URL(string: raw) {
+                    Button("Open link") {
+                        Task { await PoliticalService.track("CLICK", adId: ad.id) }
+                        UIApplication.shared.open(url)
+                    }
+                    .font(.system(size: 12))
+                    .tint(Theme.cyan400)
+                }
+                Spacer(minLength: 0)
+                if onEnd != nil {
+                    Button(ending ? "Stopping…" : "Stop this ad") {
+                        ending = true
+                        Task {
+                            await onEnd?()
+                            ending = false
+                        }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .tint(Theme.danger)
+                    .disabled(ending)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -360,6 +390,16 @@ struct PoliticalPageView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Theme.cyan300)
                             .padding(.horizontal, 14)
+
+                        if !model.ads.isEmpty {
+                            SectionHeader("Your ads")
+                            ForEach(model.ads) { ad in
+                                PoliticalAdCard(ad: ad,
+                                                onEnd: ad.active == true
+                                                    ? { await model.endAd(ad) } : nil)
+                                    .padding(.horizontal, 14)
+                            }
+                        }
                     }
 
                     SectionHeader("Posts")
@@ -394,9 +434,14 @@ struct PoliticalPageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .tint(Theme.cyan400)
         .sheet(isPresented: $runningAd) {
-            RunPoliticalAdView(page: page)
+            RunPoliticalAdView(page: page, onSubmitted: { await model.loadAds() })
         }
-        .task { await model.load() }
+        .task {
+            await model.load()
+            if page.owner?.username == session.currentUser?.username {
+                await model.loadAds()
+            }
+        }
     }
 
     private var composer: some View {
@@ -435,6 +480,7 @@ struct PoliticalPageView: View {
 /// disclosure the archive exists to preserve.
 struct RunPoliticalAdView: View {
     let page: PoliticalPage
+    var onSubmitted: (() async -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = RunPoliticalAdViewModel()
@@ -488,7 +534,11 @@ struct RunPoliticalAdView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(model.isSaving ? "Submitting…" : "Submit") {
-                        Task { if await model.save(pageId: page.id) { dismiss() } }
+                        Task {
+                            guard await model.save(pageId: page.id) else { return }
+                            dismiss()
+                            await onSubmitted?()
+                        }
                     }
                     .disabled(model.isSaving || !model.canSave)
                 }

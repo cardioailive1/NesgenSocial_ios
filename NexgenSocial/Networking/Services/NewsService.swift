@@ -67,4 +67,16 @@ enum NewsService {
                                                  files: media.uploadFiles,
                                                  as: NewsArticleResponse.self).article
     }
+
+    /// Editing the body marks the article corrected server-side; that
+    /// correction is shown, not hidden, so the card reloads after an edit.
+    static func updateArticle(_ id: String, fields: [String: Any]) async throws -> NewsArticle {
+        try await APIClient.shared.patch(APIEndpoints.News.article(id),
+                                         body: fields,
+                                         as: NewsArticleResponse.self).article
+    }
+
+    static func deleteArticle(_ id: String) async throws {
+        _ = try await APIClient.shared.delete(APIEndpoints.News.article(id))
+    }
 }

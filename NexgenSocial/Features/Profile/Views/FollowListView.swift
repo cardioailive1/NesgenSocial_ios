@@ -74,17 +74,20 @@ private struct FollowPersonRow: View {
     let person: User
 
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarView(url: person.avatarUrl, seed: person.username, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(person.displayName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("@\(person.username)")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.slate400)
+        AuthorLink(username: person.username) {
+            HStack(spacing: 12) {
+                AvatarView(url: person.avatarUrl, seed: person.username, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(person.displayName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("@\(person.username)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.slate400)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .contentShape(Rectangle())
         }
         .padding(.vertical, 4)
     }

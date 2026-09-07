@@ -13,6 +13,8 @@ struct ProfileView: View {
     @State private var showSettings = false
     @State private var avatarItem: PhotosPickerItem?
     @State private var selectedPost: Post?
+    @State private var tab: ProfileTab = .posts
+    @State private var playingReel: Reel?
 
     private var user: User? { session.currentUser }
 
@@ -24,6 +26,7 @@ struct ProfileView: View {
                 ScrollView {
                     LazyVStack(spacing: 14) {
                         header
+                        ProfileTabStrip(selection: $tab)
                         content
                     }
                     .padding(.bottom, 24)
@@ -41,6 +44,10 @@ struct ProfileView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { ProfileSettingsView().environmentObject(session) }
+            .fullScreenCover(item: $playingReel) { SingleReelView(reel: $0) }
+            .onReceive(NotificationCenter.default.publisher(for: .reelDeleted)) { note in
+                if let id = note.object as? String { model.removeDeletedReel(id) }
+            }
             .task { await model.load(username: user?.username ?? "") }
             .onChange(of: avatarItem) { _, item in
                 guard let item else { return }
@@ -110,7 +117,14 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.isLoading && model.posts.isEmpty {
+        if tab == .reels {
+            if model.reels.isEmpty {
+                EmptyTab(icon: "play.rectangle", title: "No reels yet",
+                         detail: "Reels you post will show up here.")
+            } else {
+                ReelGrid(reels: model.reels) { playingReel = $0 }
+            }
+        } else if model.isLoading && model.posts.isEmpty {
             ProgressView().tint(Theme.cyan400).padding(.top, 40)
         } else if model.posts.isEmpty {
             VStack(spacing: 6) {
@@ -125,8 +139,10 @@ struct ProfileView: View {
         } else {
             LazyVStack(spacing: 12) {
                 ForEach(model.posts) { post in
-                    PostCard(post: post, onOpen: { selectedPost = post }, onLike: {})
-                        .padding(.horizontal, 14)
+                    PostCard(post: post, onOpen: { selectedPost = post }) {
+                        await model.toggleLike(post)
+                    }
+                    .padding(.horizontal, 14)
                 }
             }
         }
@@ -141,17 +157,4 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - Pieces
 
-private struct StatItem: View {
-    let value: Int
-    let label: String
-
-    var body: some View {
-        VStack(spacing: 2) {
-            Text("\(value)").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.slate400)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}

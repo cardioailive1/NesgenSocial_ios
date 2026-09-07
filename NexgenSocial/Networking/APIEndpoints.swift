@@ -50,6 +50,8 @@ enum APIEndpoints {
             hashtag.isEmpty ? "/api/reels/discover"
                             : "/api/reels/discover?hashtag=\(hashtag.urlQueryEscaped)"
         }
+        static func reel(_ id: String) -> String { "/api/reels/\(id)" }
+        static func by(username: String) -> String { "/api/reels/by/\(username)" }
         static func like(_ id: String) -> String { "/api/reels/\(id)/like" }
         static func view(_ id: String) -> String { "/api/reels/\(id)/view" }
         static func comments(_ id: String) -> String { "/api/reels/\(id)/comments" }
@@ -136,6 +138,9 @@ enum APIEndpoints {
         static func follow(_ id: String) -> String { "/api/newsrooms/\(id)/follow" }
         static let latestArticles = "/api/newsrooms/feed/latest"
         static func articles(_ id: String) -> String { "/api/newsrooms/\(id)/articles" }
+        // Flat, not nested under the newsroom -- the route is
+        // /api/newsrooms/articles/:id on the server.
+        static func article(_ id: String) -> String { "/api/newsrooms/articles/\(id)" }
     }
 
     enum Sports {
@@ -150,6 +155,9 @@ enum APIEndpoints {
         static func follow(_ id: String) -> String { "/api/political/pages/\(id)/follow" }
         static let archive = "/api/political/archive"
         static let ads = "/api/political/ads"
+        static let activeAds = "/api/political/ads/active"
+        static func endAd(_ id: String) -> String { "/api/political/ads/\(id)/end" }
+        static func adEvent(_ id: String) -> String { "/api/political/ads/\(id)/event" }
     }
 
     enum Livestreams {

@@ -4,6 +4,9 @@ import Foundation
 final class FeedViewModel: ObservableObject, LoadingViewModel {
     @Published var posts: [Post] = []
     @Published var sponsored: [Ad] = []
+    /// Political ads are served separately from the sponsored ones and are
+    /// labelled differently: they carry the "paid for by" disclosure.
+    @Published var politicalAds: [PoliticalAd] = []
     @Published var weights = FeedWeights.default
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -19,6 +22,7 @@ final class FeedViewModel: ObservableObject, LoadingViewModel {
 
         // Ads failing is never worth blocking the feed over.
         sponsored = (try? await AdsService.serve()) ?? []
+        politicalAds = (try? await PoliticalService.activeAds()) ?? []
     }
 
     /// Save, then reload: the ranking only changes on the server's next pass.

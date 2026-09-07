@@ -70,6 +70,10 @@ final class PoliticalPageViewModel: ObservableObject, LoadingViewModel {
     @Published var draft = ""
     @Published var attachments: [PickedAttachment] = []
     @Published private(set) var isPosting = false
+    /// Only loaded for the owner: the ads this page is running, so they can
+    /// be stopped. There is no per-page ad route, so they come out of the
+    /// public archive.
+    @Published private(set) var ads: [PoliticalAd] = []
 
     private let page: PoliticalPage
 
@@ -97,6 +101,20 @@ final class PoliticalPageViewModel: ObservableObject, LoadingViewModel {
         do {
             posts = try await PoliticalService.posts(on: page.id)
             errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadAds() async {
+        ads = ((try? await PoliticalService.archive()) ?? [])
+            .filter { $0.page?.id == page.id }
+    }
+
+    func endAd(_ ad: PoliticalAd) async {
+        do {
+            let updated = try await PoliticalService.endAd(ad.id)
+            if let index = ads.firstIndex(where: { $0.id == ad.id }) { ads[index] = updated }
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -18,17 +18,22 @@ struct PostCard: View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
-                    AvatarView(url: post.author?.avatarUrl, seed: post.author?.username ?? "?", size: 38)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(post.author?.displayName ?? "Unknown")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                        HStack(spacing: 4) {
-                            Text("@\(post.author?.username ?? "")")
-                            if post.editedAt != nil { Text("· edited") }
+                    AuthorLink(username: post.author?.username) {
+                        HStack(spacing: 10) {
+                            AvatarView(url: post.author?.avatarUrl,
+                                       seed: post.author?.username ?? "?", size: 38)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(post.author?.displayName ?? "Unknown")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                HStack(spacing: 4) {
+                                    Text("@\(post.author?.username ?? "")")
+                                    if post.editedAt != nil { Text("· edited") }
+                                }
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.slate400)
+                            }
                         }
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.slate400)
                     }
                     Spacer()
                 }

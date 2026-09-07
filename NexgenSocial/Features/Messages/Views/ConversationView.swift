@@ -24,6 +24,20 @@ struct ConversationView: View {
         .navigationTitle(model.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // The title itself can't be a link, so the person is repeated as
+            // a tappable principal item -- that header is where you look for
+            // "who am I talking to".
+            ToolbarItem(placement: .principal) {
+                AuthorLink(username: model.otherUser?.username) {
+                    HStack(spacing: 6) {
+                        AvatarView(url: model.otherUser?.avatarUrl,
+                                   seed: model.otherUser?.username ?? "?", size: 26)
+                        Text(model.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
                     Task { await startCall(video: false) }
