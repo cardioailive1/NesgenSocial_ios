@@ -12,6 +12,15 @@ enum MessagesService {
             .conversations
     }
 
+    /// The server's own total, counted against each conversation's
+    /// `lastReadAt`. Never cached: the badge is refreshed precisely when the
+    /// cached number is the wrong one.
+    static func unreadCount() async throws -> Int {
+        try await APIClient.shared
+            .get(APIEndpoints.Messages.unreadCount, as: UnreadCountResponse.self, maxAge: 0)
+            .unreadCount
+    }
+
     /// Removes one message for everyone in the thread. The route is flat,
     /// `/api/messages/messages/:id`, not nested under the conversation.
     static func delete(messageId: String) async throws {

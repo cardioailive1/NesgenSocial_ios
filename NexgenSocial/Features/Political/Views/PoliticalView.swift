@@ -330,15 +330,17 @@ struct PoliticalPageCard: View {
 }
 
 struct PoliticalPageView: View {
-    let page: PoliticalPage
-
     @EnvironmentObject private var session: AuthSession
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var runningAd = false
     @StateObject private var model: PoliticalPageViewModel
 
+    /// The list's copy is only the seed. Everything on screen reads the view
+    /// model's page, which `load()` replaces with the server's copy, so the
+    /// follower, post and media counts move while the screen is open.
+    private var page: PoliticalPage { model.page }
+
     init(page: PoliticalPage) {
-        self.page = page
         _model = StateObject(wrappedValue: PoliticalPageViewModel(page: page))
     }
 

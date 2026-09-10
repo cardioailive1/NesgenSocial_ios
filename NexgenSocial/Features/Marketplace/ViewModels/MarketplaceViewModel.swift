@@ -69,6 +69,27 @@ final class MarketplaceViewModel: ObservableObject, LoadingViewModel {
         }
     }
 
+    /// The mirror of `addPhotos`. The delete route returns no listing, so the
+    /// item and the counts behind the card's meta line are updated here.
+    func removePhoto(_ item: MediaItem, from listing: MarketListing) async {
+        do {
+            try await MarketplaceService.removeMedia(item.id, from: listing.id)
+            guard let index = listings.firstIndex(where: { $0.id == listing.id }) else { return }
+            var updated = listings[index]
+            updated.media?.removeAll { $0.id == item.id }
+            if item.kind == .video {
+                updated.videoCount = max((updated.videoCount ?? 1) - 1, 0)
+            } else {
+                updated.photoCount = max((updated.photoCount ?? 1) - 1, 0)
+            }
+            updated.coverUrl = updated.media?.first { $0.kind == .photo }?.url
+            listings[index] = updated
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func delete(_ listing: MarketListing) async {
         do {
             try await MarketplaceService.delete(listing.id)
@@ -76,6 +97,37 @@ final class MarketplaceViewModel: ObservableObject, LoadingViewModel {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Saves the seller's edits. Returns true so the sheet can close only
+    /// when the change actually landed.
+    func saveEdits(to listing: MarketListing,
+                   title: String,
+                   description: String,
+                   price: String,
+                   condition: String,
+                   location: String) async -> Bool {
+        guard !title.isEmpty, !description.isEmpty, let priceValue = Double(price) else {
+            errorMessage = "Title, description, and price are required."
+            return false
+        }
+        do {
+            let updated = try await MarketplaceService.update(listing.id, fields: [
+                "title": title,
+                "description": description,
+                "priceCents": Int((priceValue * 100).rounded()),
+                "condition": condition,
+                "location": location,
+            ])
+            if let index = listings.firstIndex(where: { $0.id == listing.id }) {
+                listings[index] = updated
+            }
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 

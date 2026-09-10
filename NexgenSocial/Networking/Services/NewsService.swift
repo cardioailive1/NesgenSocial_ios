@@ -52,6 +52,17 @@ enum NewsService {
                                                  as: NewsroomResponse.self).newsroom
     }
 
+    /// Gallery items added after the newsroom was created. A newsroom took a
+    /// logo and a cover at creation and nothing after. The route answers with
+    /// the whole gallery, so the caller can replace its copy outright.
+    static func addNewsroomMedia(_ attachments: [PickedAttachment],
+                                 to newsroomId: String) async throws -> [MediaItem] {
+        try await APIClient.shared.upload(APIEndpoints.News.media(newsroomId),
+                                          fields: [:],
+                                          files: attachments.uploadFiles,
+                                          as: NewsroomMediaResponse.self).media
+    }
+
     static func publishArticle(in newsroomId: String,
                                headline: String,
                                standfirst: String,

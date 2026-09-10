@@ -61,6 +61,7 @@ extension Call {
 struct ConversationsResponse: Codable { let conversations: [Conversation] }
 struct ConversationResponse: Codable { let conversation: Conversation }
 struct MessagesResponse: Codable { let messages: [Message] }
+struct UnreadCountResponse: Codable { let unreadCount: Int }
 struct IncomingCallResponse: Codable { let call: Call? }
 struct CallsResponse: Codable { let calls: [Call] }
 struct CallResponse: Codable { let call: Call }

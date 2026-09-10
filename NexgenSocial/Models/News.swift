@@ -38,6 +38,9 @@ struct Newsroom: Codable, Identifiable, Hashable {
     var followerCount: Int?
     var followedByViewer: Bool?
     var articles: [NewsArticle]?
+    /// The newsroom's own gallery, separate from the media attached to each
+    /// article. Present on the single-newsroom response only.
+    var media: [MediaItem]?
 }
 
 struct NewsroomRef: Codable, Hashable {
@@ -68,6 +71,7 @@ struct NewsArticle: Codable, Identifiable, Hashable {
 
 struct NewsroomsResponse: Codable { let newsrooms: [Newsroom] }
 struct NewsroomResponse: Codable { let newsroom: Newsroom }
+struct NewsroomMediaResponse: Codable { let media: [MediaItem] }
 
 struct NewsArticlesResponse: Codable { let articles: [NewsArticle] }
 struct NewsArticleResponse: Codable { let article: NewsArticle }

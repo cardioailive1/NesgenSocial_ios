@@ -36,6 +36,15 @@ struct MarketplaceView: View {
                                     isMine: listing.seller?.username == session.currentUser?.username,
                                     onMarkSold: { await model.markSold(listing) },
                                     onAddPhotos: { await model.addPhotos($0, to: listing) },
+                                    onRemovePhoto: { await model.removePhoto($0, from: listing) },
+                                    onSaveEdits: { title, description, price, condition, location in
+                                        await model.saveEdits(to: listing,
+                                                              title: title,
+                                                              description: description,
+                                                              price: price,
+                                                              condition: condition,
+                                                              location: location)
+                                    },
                                     onDelete: { await model.delete(listing) })
                     }
                 }
@@ -115,17 +124,25 @@ struct ListingCard: View {
     let isMine: Bool
     let onMarkSold: () async -> Void
     let onAddPhotos: ([PhotosPickerItem]) async -> Void
+    let onRemovePhoto: (MediaItem) async -> Void
+    /// title, description, price, condition, location. Returns true when the
+    /// edit saved, so the sheet knows whether to close.
+    let onSaveEdits: (String, String, String, String, String) async -> Bool
     let onDelete: () async -> Void
 
     /// Cleared after each batch is handed over, so picking the same photo
     /// twice in a row still registers as a change.
     @State private var newPhotos: [PhotosPickerItem] = []
     @State private var confirmingDelete = false
+    @State private var editing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let media = listing.media, !media.isEmpty {
-                MediaCarousel(items: media)
+                // The seller gets a remove button on whichever item is
+                // showing; everyone else gets the plain carousel.
+                MediaCarousel(items: media,
+                              onRemove: isMine ? { item in Task { await onRemovePhoto(item) } } : nil)
             }
 
             HStack(alignment: .firstTextBaseline) {
@@ -148,6 +165,8 @@ struct ListingCard: View {
 
             if isMine {
                 HStack(spacing: 8) {
+                    Button("Edit") { editing = true }
+                        .buttonStyle(GhostButtonStyle())
                     Button("Mark as sold") { Task { await onMarkSold() } }
                         .buttonStyle(GhostButtonStyle())
                     PhotosPicker(selection: $newPhotos, maxSelectionCount: 10,
@@ -170,6 +189,9 @@ struct ListingCard: View {
             newPhotos = []
             Task { await onAddPhotos(picked) }
         }
+        .sheet(isPresented: $editing) {
+            EditListingView(listing: listing, onSave: onSaveEdits)
+        }
         .confirmationDialog("Delete this listing?", isPresented: $confirmingDelete,
                             titleVisibility: .visible) {
             Button("Delete", role: .destructive) { Task { await onDelete() } }
@@ -189,5 +211,76 @@ struct ListingCard: View {
         if videos > 0 { parts.append("\(videos) video\(videos == 1 ? "" : "s")") }
         if let seller = listing.seller { parts.append("Seller: @\(seller.username)") }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// The seller's edit form. The same five fields the sell form takes, seeded
+/// from the listing; photos are added and removed on the card itself.
+struct EditListingView: View {
+    let listing: MarketListing
+    let onSave: (String, String, String, String, String) async -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var description: String
+    @State private var price: String
+    @State private var condition: String
+    @State private var location: String
+    @State private var isSaving = false
+
+    init(listing: MarketListing,
+         onSave: @escaping (String, String, String, String, String) async -> Bool) {
+        self.listing = listing
+        self.onSave = onSave
+        _title = State(initialValue: listing.title)
+        _description = State(initialValue: listing.description)
+        _price = State(initialValue: String(format: "%.2f", Double(listing.priceCents) / 100.0))
+        _condition = State(initialValue: listing.condition ?? "")
+        _location = State(initialValue: listing.location ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.navy950.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("What are you selling?", text: $title).fieldStyle()
+                        TextField("Describe it", text: $description, axis: .vertical)
+                            .lineLimit(3...8)
+                            .fieldStyle()
+                        HStack(spacing: 8) {
+                            TextField("Price (USD)", text: $price)
+                                .keyboardType(.decimalPad)
+                                .fieldStyle()
+                            TextField("Condition", text: $condition).fieldStyle()
+                        }
+                        TextField("Location", text: $location).fieldStyle()
+
+                        Button(isSaving ? "Saving…" : "Save changes") {
+                            Task {
+                                isSaving = true
+                                let saved = await onSave(title, description, price, condition, location)
+                                isSaving = false
+                                if saved { dismiss() }
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isSaving)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(14)
+                }
+            }
+            .navigationTitle("Edit listing")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(Theme.cyan400)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
     }
 }

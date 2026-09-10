@@ -9,6 +9,14 @@ enum PoliticalService {
         return try await APIClient.shared.get(path, as: PoliticalPagesResponse.self).pages
     }
 
+    /// The page on its own, with fresh follower, post and media counts. The
+    /// list hands the page over by value, so a screen left open would
+    /// otherwise show the counts it was opened with.
+    static func page(_ id: String) async throws -> PoliticalPage {
+        try await APIClient.shared
+            .get(APIEndpoints.Political.page(id), as: PoliticalPageResponse.self, maxAge: 0).page
+    }
+
     static func posts(on pageId: String) async throws -> [PoliticalPost] {
         try await APIClient.shared
             .get(APIEndpoints.Political.posts(pageId), as: PoliticalPostsResponse.self).posts

@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import PhotosUI
 
 @MainActor
 final class NewsViewModel: ObservableObject, LoadingViewModel {
@@ -153,6 +155,20 @@ final class NewsroomDetailViewModel: ObservableObject, LoadingViewModel {
             let loaded = try await NewsService.newsroom(slug: slug)
             newsroom = loaded
             isFollowing = loaded.followedByViewer ?? false
+        }
+    }
+
+    /// Owner-only. The response carries the whole gallery back, so the
+    /// section redraws without another fetch of the newsroom.
+    func addMedia(_ items: [PhotosPickerItem]) async {
+        guard let id = newsroom?.id else { return }
+        let picked = await AttachmentLoader.load(items)
+        guard !picked.isEmpty else { return }
+        do {
+            newsroom?.media = try await NewsService.addNewsroomMedia(picked, to: id)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

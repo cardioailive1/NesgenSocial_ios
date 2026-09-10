@@ -6,10 +6,11 @@ import Foundation
 /// `MainTabView`, and the number comes from the conversation list that
 /// `MessagesViewModel` loads several screens away.
 ///
-/// There is no count endpoint -- `GET /api/messages` carries `unreadCount`
-/// per conversation, so the total is a sum over the list the Messages screen
-/// already fetches. `MessagesViewModel` hands its list over rather than
-/// making the same request twice.
+/// Two ways in. `update(from:)` sums the `unreadCount` each conversation
+/// already carries, so the Messages screen updates the badge from the list it
+/// just loaded rather than making a second request. `refresh()` asks
+/// `GET /api/messages/unread-count` for the server's own total, for callers
+/// with no list in hand.
 @MainActor
 final class UnreadBadge: ObservableObject {
     static let shared = UnreadBadge()
@@ -23,10 +24,10 @@ final class UnreadBadge: ObservableObject {
     }
 
     /// For callers with no list in hand -- the tab bar on foreground, and
-    /// leaving a thread that was just read. Uncached on purpose: both cases
-    /// are exactly when the cached list's counts are the stale ones.
+    /// leaving a thread that was just read. One small request instead of the
+    /// whole conversation list.
     func refresh() async {
-        guard let conversations = try? await MessagesService.conversations(maxAge: 0) else { return }
-        update(from: conversations)
+        guard let total = try? await MessagesService.unreadCount() else { return }
+        count = total
     }
 }

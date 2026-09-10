@@ -63,14 +63,13 @@ final class Phase2SocialTests: XCTestCase {
         XCTAssertEqual(UnreadBadge.shared.count, 7)
     }
 
-    /// The list route is cached for the Messages screen; the badge asks for a
-    /// fresh copy, because it refreshes exactly when the cached counts are
-    /// the stale ones.
+    /// The count route is never served from the cache: the badge refreshes
+    /// exactly when a cached number would be the stale one.
     func testTheBadgeRefreshBypassesTheResponseCache() async {
         var requests = 0
         StubAPI.install { _ in
             requests += 1
-            return (200, Data(#"{"conversations":[{"id":"a","unreadCount":1}]}"#.utf8))
+            return (200, Data(#"{"unreadCount":1}"#.utf8))
         }
 
         await UnreadBadge.shared.refresh()

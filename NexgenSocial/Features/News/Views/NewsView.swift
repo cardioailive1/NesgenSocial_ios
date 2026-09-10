@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// Syndicated headlines from the outlets' own public RSS feeds. Headline,
 /// blurb, and a link out — the article itself opens at the source.
@@ -99,6 +100,10 @@ struct NewsroomDetailView: View {
     @StateObject private var model: NewsroomDetailViewModel
     @EnvironmentObject private var session: AuthSession
 
+    /// Cleared after each batch is handed over, so picking the same photo
+    /// twice in a row still registers as a change.
+    @State private var galleryPicks: [PhotosPickerItem] = []
+
     init(slug: String) {
         _model = StateObject(wrappedValue: NewsroomDetailViewModel(slug: slug))
     }
@@ -109,6 +114,9 @@ struct NewsroomDetailView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
+                    ErrorBanner(message: model.errorMessage)
+                        .padding(.horizontal, 14)
+
                     if let newsroom = model.newsroom {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
@@ -131,6 +139,22 @@ struct NewsroomDetailView: View {
                         }
                         .padding(.horizontal, 14)
 
+                        if let media = newsroom.media, !media.isEmpty {
+                            SectionHeader("Gallery")
+                            MediaCarousel(items: media)
+                                .padding(.horizontal, 14)
+                        }
+
+                        if newsroom.owner?.username == session.currentUser?.username {
+                            PhotosPicker(selection: $galleryPicks, maxSelectionCount: 10,
+                                         matching: .any(of: [.images, .videos])) {
+                                Label("Add to gallery", systemImage: "photo.on.rectangle.angled")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.cyan300)
+                            }
+                            .padding(.horizontal, 14)
+                        }
+
                         SectionHeader("Articles")
                         ForEach(newsroom.articles ?? []) { article in
                             ArticleCard(article: article,
@@ -148,6 +172,11 @@ struct NewsroomDetailView: View {
         }
         .navigationTitle(model.newsroom?.name ?? "Newsroom")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: galleryPicks) { _, picked in
+            guard !picked.isEmpty else { return }
+            galleryPicks = []
+            Task { await model.addMedia(picked) }
+        }
         .task { await model.load() }
     }
 }

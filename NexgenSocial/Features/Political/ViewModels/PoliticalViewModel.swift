@@ -75,7 +75,9 @@ final class PoliticalPageViewModel: ObservableObject, LoadingViewModel {
     /// public archive.
     @Published private(set) var ads: [PoliticalAd] = []
 
-    private let page: PoliticalPage
+    /// Seeded from the list so the screen draws immediately, then replaced by
+    /// the page's own route on every load.
+    @Published private(set) var page: PoliticalPage
 
     init(page: PoliticalPage) { self.page = page }
 
@@ -99,6 +101,13 @@ final class PoliticalPageViewModel: ObservableObject, LoadingViewModel {
     func load() async {
         isFollowing = page.followedByViewer ?? false
         do {
+            // The detail route carries the posts as well, but it is the
+            // counts that go stale; the posts route stays the source of the
+            // list so a failure of one does not blank the other.
+            if let fresh = try? await PoliticalService.page(page.id) {
+                page = fresh
+                isFollowing = fresh.followedByViewer ?? false
+            }
             posts = try await PoliticalService.posts(on: page.id)
             errorMessage = nil
         } catch {

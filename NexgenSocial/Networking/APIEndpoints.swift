@@ -61,6 +61,7 @@ enum APIEndpoints {
 
     enum Messages {
         static let root = "/api/messages"
+        static let unreadCount = "/api/messages/unread-count"
         static func withUser(_ username: String) -> String { "/api/messages/with/\(username)" }
         static func messages(in conversationId: String) -> String { "/api/messages/\(conversationId)/messages" }
         /// A single message, for deletion. Not nested under its conversation:
@@ -138,6 +139,7 @@ enum APIEndpoints {
         static func follow(_ id: String) -> String { "/api/newsrooms/\(id)/follow" }
         static let latestArticles = "/api/newsrooms/feed/latest"
         static func articles(_ id: String) -> String { "/api/newsrooms/\(id)/articles" }
+        static func media(_ id: String) -> String { "/api/newsrooms/\(id)/media" }
         // Flat, not nested under the newsroom -- the route is
         // /api/newsrooms/articles/:id on the server.
         static func article(_ id: String) -> String { "/api/newsrooms/articles/\(id)" }
@@ -151,6 +153,7 @@ enum APIEndpoints {
 
     enum Political {
         static let pages = "/api/political/pages"
+        static func page(_ id: String) -> String { "/api/political/pages/\(id)" }
         static func posts(_ id: String) -> String { "/api/political/pages/\(id)/posts" }
         static func follow(_ id: String) -> String { "/api/political/pages/\(id)/follow" }
         static let archive = "/api/political/archive"
@@ -199,6 +202,9 @@ enum APIEndpoints {
         }
         static func listing(_ id: String) -> String { "\(root)/\(id)" }
         static func media(_ id: String) -> String { "\(root)/\(id)/media" }
+        static func mediaItem(_ id: String, mediaId: String) -> String {
+            "\(root)/\(id)/media/\(mediaId)"
+        }
     }
 
     enum Jobs {

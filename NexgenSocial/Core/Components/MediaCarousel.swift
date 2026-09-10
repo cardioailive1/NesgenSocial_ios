@@ -3,6 +3,10 @@ import SwiftUI
 /// Swipeable media, handling photo and video in one control.
 struct MediaCarousel: View {
     let items: [MediaItem]
+    /// Set only where the viewer owns the media -- a seller taking a photo
+    /// back off their own listing. Everywhere else the carousel is read-only
+    /// and this stays nil.
+    var onRemove: ((MediaItem) -> Void)?
     @State private var index = 0
 
     var body: some View {
@@ -42,13 +46,29 @@ struct MediaCarousel: View {
 
     @ViewBuilder
     private func page(for item: MediaItem, isActive: Bool) -> some View {
-        if item.kind == .video {
-            // VideoSurface fills whatever it is given, so a lone video needs
-            // a shape of its own; a photo brings one.
-            VideoSurface(url: APIClient.mediaURL(item.url), isActive: isActive)
-                .aspectRatio(items.count == 1 ? 16.0 / 9.0 : nil, contentMode: .fit)
-        } else {
-            RetryingImage(url: APIClient.mediaURL(item.url))
+        Group {
+            if item.kind == .video {
+                // VideoSurface fills whatever it is given, so a lone video
+                // needs a shape of its own; a photo brings one.
+                VideoSurface(url: APIClient.mediaURL(item.url), isActive: isActive)
+                    .aspectRatio(items.count == 1 ? 16.0 / 9.0 : nil, contentMode: .fit)
+            } else {
+                RetryingImage(url: APIClient.mediaURL(item.url))
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let onRemove {
+                Button {
+                    onRemove(item)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.55))
+                        .padding(8)
+                }
+                .accessibilityLabel("Remove this photo")
+            }
         }
     }
 }
